@@ -50,7 +50,7 @@ By greedily selecting $k$ "longest sequence of 0's", we can prove the following 
 1. It is never going to overestimate $|M_k(S, P)|$. So always REJECTs if $|M_k(S, P)|<0.632 m$. Zero false positive rate.
 
    This proof is mostly trivial.
-2. If the alignment is good, i.e. $|M_k(S, P)|\geq \varepsilon n$, then the approximation $|\hat{M}_k(S,P)|\geq (1-1/e)m$.
+2. If the alignment is good, i.e. $|M_k(S, P)|\geq m$, then the approximation $|\hat{M}_k(S,P)|\geq (1-1/e)m$.
 
    I realize that this is actually a [maximum coverage problem](https://en.wikipedia.org/wiki/Maximum_coverage_problem)! Which is NP-complete! 简单问题复杂化！This claim can be proved by the greedy algorithm used to solve this problem (I haven't checked carefully yet).
 
