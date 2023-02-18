@@ -1,3 +1,7 @@
+#ifndef GREEDY_ALIGN_ALIGNER_HPP
+#define GREEDY_ALIGN_ALIGNER_HPP
+
+
 #include "../utils.hpp"
 
 #include <seqan3/core/algorithm/algorithm_result_generator_range.hpp>
@@ -25,3 +29,5 @@ public:
      */
     virtual align_result_t align(seqan3::dna4_vector s1, seqan3::dna4_vector s2) = 0;
 };
+
+#endif
