@@ -7,6 +7,9 @@
 #include <seqan3/search/kmer_index/shape.hpp>
 #include <bitset>
 
+using seqan3::operator""_cigar_operation;
+
+
 template<unsigned int READ_LENGTH>
 class read_bit_vectors {
 public:
@@ -55,6 +58,13 @@ public:
 };
 
 
+typedef struct {
+    int lane;
+    unsigned int offset;
+    unsigned int length = 0;
+} de_bruijn_highway_t;
+
+
 template<unsigned int READ_LENGTH>
 class de_bruijn_lanes {
 private:
@@ -68,8 +78,6 @@ private:
     // k, the length of k-mers used to match the two sequences.
     unsigned int k;
 
-    // length of the read and pattern,
-    unsigned int l1, l2;
 
     /**
      * @brief After assigning all the bits in `lanes`, store the ~`lanes`
@@ -97,6 +105,9 @@ private:
 
 
 public:
+    // length of the read and pattern,
+    unsigned int l1, l2;
+
     /**
      * @brief Construct a new de_bruijn_lanes object.
      * 
@@ -155,8 +166,8 @@ public:
         read_bit_vectors<READ_LENGTH> v2(s2);
 
         // store the length of the two sequences.
-        l1 = s1.size();
-        l2 = s2.size();
+        l1 = s1.size() - k + 1;
+        l2 = s2.size() - k + 1;
 
         // perform shifting and bitwise xor operation, and store in `lanes`.
         for (int l = -bw; l <= bw; l++) {
@@ -178,18 +189,26 @@ public:
      * 
      * @param lane the index for the lane.
      * @param offset the position where we start to look for a highway.
-     * @return std::pair<unsigned int, unsigned int> a pair of integers, where the first
-     *         represents the starting position and the second represent the length of highway.
+     * @return the information about the starting position and the second represent the length of highway.
      */
-    std::pair<unsigned int, unsigned int> nearest_highway(int lane, unsigned int offset) {
-        unsigned int start, length = 0;
-        start = lanes_flipped[lane + bw]._Find_next(offset);
-        if (start < READ_LENGTH) {
-            length = lanes[lane + bw]._Find_next(start) - start;
+    de_bruijn_highway_t nearest_highway(int lane, unsigned int offset) {
+        de_bruijn_highway_t res;
+        res.lane = lane;
+
+        // find the starting point of the highway
+        if (offset == 0) {
+            res.offset = lanes_flipped[lane + bw]._Find_first();
+        } else {
+            res.offset = lanes_flipped[lane + bw]._Find_next(offset - 1);
         }
-        seqan3::debug_stream << "[INFO]\t\t" << "On lane " << lane << ", next highway starts at " 
-                             << start << " and has length " << length << ".\n";
-        return std::make_pair(start, length);
+        
+        // find the length of the highway
+        if (res.offset < READ_LENGTH) res.length = lanes[lane + bw]._Find_next(res.offset) - res.offset;
+        else res.length = 0;
+
+        seqan3::debug_stream << "[INFO]\t\t" << "On lane " << res.lane << ", next highway starts at " 
+                             << res.offset << " and has length " << res.length << ".\n";
+        return res;
     }
 };
 
@@ -202,22 +221,105 @@ private:
     de_bruijn_lanes<READ_LENGTH>* lanes;
 
     /**
+     * @brief calculate the offset if we go from current lane to a target lane.
+     * 
+     * @param current_lane the current de Bruijn lane we are in.
+     * @param target_lane the target lane we are going to (by insertion or deletion).
+     * @param current_offset the current k-mer we are at.
+     */
+    unsigned int _get_offset(int current_lane, int target_lane, unsigned int current_offset) {
+        // if at the beginning of the alignment, set offset in all lanes to zero.
+        if (current_offset == 0) return 0;
+        // if there is no insertion/deletion, make offset the same as before.
+        if (current_lane == target_lane) return current_offset;
+        // if there are insertion/deletions, increase the offset by k-1+|current_lane - target_lane|.
+        else return current_offset + k + std::abs(current_lane - target_lane) - 1;
+    }
+
+    void _update_cigar(CIGAR& cigar, int current_lane, unsigned int current_offset, const de_bruijn_highway_t& best_highway) {
+        // record number of indels
+        if (current_lane > best_highway.lane) {
+            cigar.push_back(current_lane - best_highway.lane, 'D'_cigar_operation);
+        } else if (current_lane < best_highway.lane) {
+            cigar.push_back(best_highway.lane - current_lane, 'I'_cigar_operation);
+        }
+        
+        // find number of mismatches
+        int mismatches = best_highway.offset - current_offset - std::abs(current_lane - best_highway.lane) - k + 1;
+        if (mismatches > 0) {
+            cigar.push_back(mismatches, 'X'_cigar_operation);
+        }
+        cigar.push_back(best_highway.length, '='_cigar_operation);
+    }
+
+
+    /**
      * @brief Greedily find the subpath that maximize the k-matching.
      * 
      */
-    void _find_subpath() {
+    align_result_t _find_subpath() {
+        // initialize result
+        align_result_t res;
+        CIGAR cigar;
+
         // record the current position
         int current_lane = 0, current_offset = 0;
 
         // greedily search for the next best highway
-        unsigned int best_length = 0, best_errors = e;
-        for (int i = -bw; i <= bw; i++) {
-            auto [start, length] = lanes->nearest_highway(i, 0);
-            
-            
+        unsigned int best_errors;
+        while (true) {
+            // initialize
+            best_errors = INT_MAX;
+            de_bruijn_highway_t best_highway;
 
+            // check each lane for possible lengths
+            for (int l = -bw; l <= bw; l++) {
+                auto offset_l = _get_offset(current_lane, l, current_offset);
+                auto highway_l = lanes->nearest_highway(l, offset_l);
+
+                // skip if there is no highway in this lane
+                if (highway_l.length == 0) continue;
+
+                // the number of k-mers we missed
+                unsigned int errors_l = highway_l.offset - current_offset;
+
+                // chech if the current highway is a better one.
+                if (errors_l <= std::max(e, best_errors) && 
+                    (best_errors > e || 
+                     highway_l.length > best_highway.length ||
+                     (highway_l.length == best_highway.length && errors_l < best_errors)
+                    )) {
+                    best_highway = highway_l;
+                    best_errors = errors_l;
+                }
+                
+            }
+            seqan3::debug_stream << "[INFO]\t\tChosen next highway to be on lane " << best_highway.lane << " starting at " << best_highway.offset 
+                                 << " with length " << best_highway.length << ", while missing out " << best_errors << " k-mers.\n";
+            
+            
+            
+            if (best_highway.length > 0) {
+                // record the score
+                res.score += best_highway.length;
+
+                // record the lane switching and matching in the cigar string.
+                _update_cigar(cigar, current_lane, current_offset, best_highway);
+
+                // move to the end of the best highway.
+                current_lane = best_highway.lane;
+                current_offset = best_highway.offset + best_highway.length;
+                seqan3::debug_stream << "[INFO]\t\tCurrent position is (" << current_lane << ", " << current_offset << ").\n";
+            }
+            
+            // check if we can break out the loop (no more highways or reached the gaol)
+            if (best_highway.length == 0 || current_offset == lanes->l2) {
+                break;
+            }                
         }
-
+        res.CIGAR = cigar.to_string();
+        seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.CIGAR << ".\n";
+        return res;
 
     }
 

@@ -98,7 +98,7 @@ public:
     }
 
     /**
-     * @brief Insert a cigar operation at the back of all operations.
+     * @brief Insert one or several cigar operation at the back of all operations.
      * 
      * @param size The number of operations in the CIGAR string.
      * @param op the operation, which should be 'M', '=', 'X', 'I', 'D', etc.

@@ -18,7 +18,7 @@ public:
      * @param CIGAR the CIGAR string to indicate how the two strings are aligned together.
      */
     typedef struct {
-        int score;
+        int score = 0;
         std::string CIGAR;
     } align_result_t; 
 
