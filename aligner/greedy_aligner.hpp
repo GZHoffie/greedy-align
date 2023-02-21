@@ -41,14 +41,16 @@ public:
         if (shift_amount > 0) {
             // void out the shifted bits
             res = ~(res >> (READ_LENGTH - that.length) >> shift_amount << shift_amount);
-            //seqan3::debug_stream << shift_amount << " " << res << "\n";
+            //seqan3::debug_stream << shift_amount << "\t" << res << "\n";
             // perform bitwise xor operation
             res |= ((b1 << shift_amount) ^ that.b1) | ((b2 << shift_amount) ^ that.b2);
             //seqan3::debug_stream << shift_amount << " " << res << "\n";
         } else {
             // same as above, but in opposite direction
-            res = ~(res << -shift_amount >> (-shift_amount + READ_LENGTH - that.length));
-            //seqan3::debug_stream << shift_amount << " " << res << "\n";
+            unsigned int void_amount = std::max(0, -shift_amount - (int)(length - that.length));
+            res = ~(res << void_amount >> (void_amount + READ_LENGTH - that.length));
+            //res = ~(res << -shift_amount >> (-shift_amount + READ_LENGTH - that.length));
+            //seqan3::debug_stream << shift_amount << "\t" << res << "\n";
             res |= ((b1 >> -shift_amount) ^ that.b1) | ((b2 >> -shift_amount) ^ that.b2);
             //seqan3::debug_stream << shift_amount << " " << res << "\n";
         }
@@ -175,6 +177,7 @@ public:
             auto original_lane = get(l);
             for (int i = 1; i < k; i++) {
                 get(l) |= (original_lane >> i);
+                get(l).set(READ_LENGTH-i);
             }
         }
 
@@ -205,9 +208,9 @@ public:
         // find the length of the highway
         if (res.offset < READ_LENGTH) res.length = lanes[lane + bw]._Find_next(res.offset) - res.offset;
         else res.length = 0;
-
-        seqan3::debug_stream << "[INFO]\t\t" << "On lane " << res.lane << ", next highway starts at " 
-                             << res.offset << " and has length " << res.length << ".\n";
+        
+        //seqan3::debug_stream << "[INFO]\t\t" << "On lane " << res.lane << ", next highway starts at " 
+        //                     << res.offset << " and has length " << res.length << ".\n";
         return res;
     }
 };
@@ -219,6 +222,7 @@ private:
     int bw;
     unsigned int e;
     de_bruijn_lanes<READ_LENGTH>* lanes;
+    bool debug;
 
     /**
      * @brief calculate the offset if we go from current lane to a target lane.
@@ -233,7 +237,14 @@ private:
         // if there is no insertion/deletion, make offset the same as before.
         if (current_lane == target_lane) return current_offset;
         // if there are insertion/deletions, increase the offset by k-1+|current_lane - target_lane|.
-        else return current_offset + k + std::abs(current_lane - target_lane) - 1;
+        else if (current_lane > target_lane) {
+            // a deletion, at least k-1 number of k-mers will be affected.
+            return current_offset + k - 1;
+        } else {
+            // an insertion, at least #insertions number of k-mers will be affected.
+            return current_offset + target_lane - current_lane;
+        }
+         
     }
 
     void _update_cigar(CIGAR& cigar, int current_lane, unsigned int current_offset, const de_bruijn_highway_t& best_highway) {
@@ -249,7 +260,7 @@ private:
         if (mismatches > 0) {
             cigar.push_back(mismatches, 'X'_cigar_operation);
         }
-        cigar.push_back(best_highway.length, '='_cigar_operation);
+        cigar.push_back(best_highway.length + k - 1, '='_cigar_operation);
     }
 
 
@@ -294,9 +305,10 @@ private:
                 }
                 
             }
-            seqan3::debug_stream << "[INFO]\t\tChosen next highway to be on lane " << best_highway.lane << " starting at " << best_highway.offset 
-                                 << " with length " << best_highway.length << ", while missing out " << best_errors << " k-mers.\n";
-            
+            if (debug) {
+                seqan3::debug_stream << "[INFO]\t\tChosen next highway to be on lane " << best_highway.lane << " starting at " << best_highway.offset 
+                                     << " with length " << best_highway.length << ", while missing out " << best_errors << " k-mers.\n";
+            }
             
             
             if (best_highway.length > 0) {
@@ -309,7 +321,10 @@ private:
                 // move to the end of the best highway.
                 current_lane = best_highway.lane;
                 current_offset = best_highway.offset + best_highway.length;
-                seqan3::debug_stream << "[INFO]\t\tCurrent position is (" << current_lane << ", " << current_offset << ").\n";
+                if (debug) {
+                    seqan3::debug_stream << "[INFO]\t\tCurrent position is (" << current_lane << ", " << current_offset << ").\n";
+                }
+                
             }
             
             // check if we can break out the loop (no more highways or reached the gaol)
@@ -318,7 +333,9 @@ private:
             }                
         }
         res.CIGAR = cigar.to_string();
-        seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.CIGAR << ".\n";
+        if (debug) {
+            seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.CIGAR << ".\n";
+        }
         return res;
 
     }
@@ -332,10 +349,11 @@ public:
      * @param band_width maximum indel allowed.
      * @param max_errors maximum number of errors between each highways.
      */
-    greedy_aligner(unsigned int kmer_length, unsigned int band_width, unsigned int max_errors) : aligner() {
+    greedy_aligner(unsigned int kmer_length, unsigned int band_width, unsigned int max_errors, bool print_debug_messages = false) : aligner() {
         k = kmer_length;
         bw = band_width;
         e = max_errors;
+        debug = print_debug_messages;
         lanes = new de_bruijn_lanes<READ_LENGTH>(k, bw);
     }
 
@@ -343,12 +361,13 @@ public:
         delete lanes;
     }
 
-    align_result_t align(seqan3::dna4_vector s1, seqan3::dna4_vector s2) {
-        align_result_t res;
+    align_result_t align(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) {
         lanes->read(s1, s2);
-        lanes->print();
-        _find_subpath();
-        return res;
+        if (debug) {
+            lanes->print();
+        }
+        
+        return _find_subpath();
     }
 };
 

@@ -27,7 +27,7 @@ public:
      * @param s1, s2 the DNA strings to be aligned together.
      * @return align_result_t
      */
-    virtual align_result_t align(seqan3::dna4_vector s1, seqan3::dna4_vector s2) = 0;
+    virtual align_result_t align(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) = 0;
 };
 
 #endif

@@ -30,10 +30,13 @@ FetchContent_MakeAvailable(sharg)
 set(ALIGNER_FILES
     aligner/aligner.hpp
     aligner/sw_aligner.hpp
-    aligner/greedy_aligner.hpp)
+    aligner/greedy_aligner.hpp
+    aligner/k_matching.hpp)
+
 
 set(UTIL_FILES
-    utils.hpp)
+    utils.hpp
+    tools/generate_dataset.hpp)
 
 set(SHARED_FILES
     ${UTIL_FILES}
@@ -42,3 +45,7 @@ set(SHARED_FILES
 # build dataset generating tools
 add_executable(greedy_aligner main.cpp ${SHARED_FILES})
 target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg)
+
+
+add_executable(greedy_aligner_test test.cpp ${SHARED_FILES})
+target_link_libraries(greedy_aligner_test PUBLIC seqan3::seqan3)

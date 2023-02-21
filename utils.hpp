@@ -5,11 +5,13 @@
 #include <seqan3/alphabet/nucleotide/dna4.hpp>
 #include <seqan3/core/debug_stream.hpp>
 #include <seqan3/alphabet/cigar/all.hpp>
+#include <seqan3/io/sequence_file/all.hpp>
 #include <seqan3/alphabet/container/bitpacked_sequence.hpp>
 
 #include <chrono>
 #include <thread>
 #include <assert.h>
+#include <filesystem>
 
 /**
  * @brief Class for benchmark of runtime.
@@ -50,6 +52,15 @@ public:
     }
 };
 
+struct _dna4_traits : seqan3::sequence_file_input_default_traits_dna {
+    /**
+     * @brief Syntax for reading the query file.
+     */
+    using sequence_alphabet = seqan3::dna4; // instead of dna5
+ 
+    template <typename alph>
+    using sequence_container = std::vector<alph>; // must be defined as a template!
+};
 
 class CIGAR {
     /**
