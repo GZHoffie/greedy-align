@@ -256,11 +256,12 @@ private:
         }
         
         // find number of mismatches
-        int mismatches = best_highway.offset - current_offset - std::abs(current_lane - best_highway.lane) - k + 1;
+        unsigned int start_point_in_lane = _get_offset(current_lane, best_highway.lane, current_offset);
+        int mismatches = best_highway.offset - start_point_in_lane;
         if (mismatches > 0) {
             cigar.push_back(mismatches, 'X'_cigar_operation);
         }
-        cigar.push_back(best_highway.length + k - 1, '='_cigar_operation);
+        cigar.push_back(best_highway.offset + best_highway.length - start_point_in_lane, '='_cigar_operation);
     }
 
 

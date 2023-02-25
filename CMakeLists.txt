@@ -20,23 +20,26 @@ FetchContent_Declare(sharg
 )
 FetchContent_MakeAvailable(sharg)
 
-#FetchContent_Declare(parasail
-#  GIT_REPOSITORY https://github.com/jeffdaily/parasail.git
-#  GIT_TAG        master
-#)
-#FetchContent_MakeAvailable(parasail)
+FetchContent_Declare(parasail
+  GIT_REPOSITORY https://github.com/jeffdaily/parasail.git
+  GIT_TAG        master
+)
+FetchContent_MakeAvailable(parasail)
 
 # set common header files
 set(ALIGNER_FILES
     aligner/aligner.hpp
-    aligner/sw_aligner.hpp
-    aligner/greedy_aligner.hpp
-    aligner/k_matching.hpp)
+    aligner/greedy_aligner.hpp)
 
+set(BENCHMARK_FILES
+    aligner/seqan_aligner.hpp
+    aligner/parasail_aligner.hpp
+    aligner/k_matching.hpp)
 
 set(UTIL_FILES
     utils.hpp
-    tools/generate_dataset.hpp)
+    tools/generate_dataset.hpp
+    benchmark/benchmark.hpp)
 
 set(SHARED_FILES
     ${UTIL_FILES}
@@ -49,3 +52,6 @@ target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg)
 
 add_executable(greedy_aligner_test test.cpp ${SHARED_FILES})
 target_link_libraries(greedy_aligner_test PUBLIC seqan3::seqan3)
+
+add_executable(aligner_benchmark benchmark.cpp ${BENCHMARK_FILES} ${SHARED_FILES})
+target_link_libraries(aligner_benchmark PUBLIC seqan3::seqan3 sharg::sharg parasail)

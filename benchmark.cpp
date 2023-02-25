@@ -65,8 +65,6 @@ int main() {
 
     seqan3::debug_stream << "Correct: " << correct << "\n";
     seqan3::debug_stream << "[BENCHMARK]\tTime used by greedy aligner: " << greedy_timer.elapsed_seconds() << " s (" 
-                         << (float)greedy_timer.elapsed_seconds() / index * 1000 * 1000 << "μs per pairwise alignment).\n";
-    seqan3::debug_stream << "[BENCHMARK]\tTime used by exact k-matching aligner: " << exact_matching_timer.elapsed_seconds() << " s (" 
-                         << (float)exact_matching_timer.elapsed_seconds() / index * 1000 * 1000 << "μs per pairwise alignment).\n";                     
+                         << (float)greedy_timer.elapsed_seconds() / index * 1000 * 1000 << " μs per pairwise alignment).\n";                     
     return 0;
 }
