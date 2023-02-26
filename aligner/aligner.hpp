@@ -12,6 +12,8 @@ protected:
 public:
     aligner(){};
 
+    std::string name;
+
     /**
      * @brief Data structure containing alignment results.
      * @param score alignment score, used to indicate mapping significance.

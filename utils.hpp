@@ -13,6 +13,9 @@
 #include <assert.h>
 #include <filesystem>
 
+
+using seqan3::operator""_cigar_operation;
+
 /**
  * @brief Class for benchmark of runtime.
  *        Adopted from https://coliru.stacked-crooked.com/a/508ec779dea5a28d.
@@ -51,6 +54,48 @@ public:
         return ((float) _elapsed.count()) / 1000;
     }
 };
+
+/**
+ * @brief Check if the specified directory exists. If it does, check if files with certain
+ *        file extension name exist. If not, create the directory.
+ * @param index_directory a path to a directory to be checked.
+ * @param ext a string starting with a ".", indicating file extension name.
+ * @returns true if the directory doesn't exist or no such file extension found. False otherwise.
+ */
+bool check_extension_in(std::filesystem::path const & index_directory,
+                            std::string ext) {
+    if (!std::filesystem::create_directories(index_directory)) {
+        for (const auto& entry : std::filesystem::directory_iterator(index_directory)) {
+            if (entry.path().extension() == ext) {
+                seqan3::debug_stream << "[ERROR]\t\t" << "The file with extension " << ext <<" already exists in directory: " 
+                                     << entry.path() << "." << '\n';
+                return false;
+            }
+        }    
+    }
+    return true;    
+}
+
+/**
+ * @brief Check if the specified directory exists. If it does, check if files with certain
+ *        name exist. If not, create the directory.
+ * @param index_directory a path to a directory to be checked.
+ * @param filename a string, including the extension name.
+ * @returns true if the directory doesn't exist or no such file found. False otherwise.
+ */
+bool check_filename_in(std::filesystem::path const & index_directory,
+                       const std::string& filename) {
+    if (!std::filesystem::create_directories(index_directory)) {
+        for (const auto& entry : std::filesystem::directory_iterator(index_directory)) {
+            if (entry.path() == index_directory / filename) {
+                seqan3::debug_stream << "[ERROR]\t\t" << "The specified file already exists in directory: " 
+                                     << index_directory / filename << "." << '\n';
+                return false;
+            }
+        }    
+    }
+    return true;    
+}
 
 struct _dna4_traits : seqan3::sequence_file_input_default_traits_dna {
     /**
@@ -153,6 +198,36 @@ public:
             }
             if (size != 0) {
                 res += std::to_string(size) + last_op.to_char();
+            }
+        }
+        return res;
+    }
+    
+    /**
+     * @brief Find the k_matching of the indicated alignment based on the CIGAR string.
+     * 
+     * @return unsigned int the number of k-mers that are matched in the alignment.
+     */
+    unsigned int k_matching(unsigned int k) {
+        unsigned int res = 0;
+        int size = 0;
+        seqan3::cigar::operation last_op, curr_op;
+        if (!CIGAR_vector.empty()) {
+            last_op = get<1>(CIGAR_vector[0]);
+            for (auto cigar : CIGAR_vector) {
+                auto &[curr_size, curr_op] = cigar;
+                if (last_op == curr_op) {
+                    size += curr_size;
+                } else if (size != 0) {
+                    if (last_op == '='_cigar_operation && size >= k) {
+                        res += size - k + 1;
+                    }
+                    size = curr_size;
+                    last_op = curr_op;
+                }
+            }
+            if (last_op == '='_cigar_operation && size >= k) {
+                res += size - k + 1;
             }
         }
         return res;

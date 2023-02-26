@@ -242,7 +242,27 @@ private:
             return current_offset + k - 1;
         } else {
             // an insertion, at least #insertions number of k-mers will be affected.
-            return current_offset + target_lane - current_lane;
+            return current_offset + k - 1 + target_lane - current_lane;
+        }
+         
+    }
+
+    /**
+     * @brief calculate the next starting point if we go from current lane to a target lane.
+     * 
+     * @param current_lane the current de Bruijn lane we are in.
+     * @param target_lane the target lane we are going to (by insertion or deletion).
+     * @param current_offset the current k-mer we are at.
+     */
+    unsigned int _get_starting_point_in_next_lane(int current_lane, int target_lane, unsigned int current_offset) {
+        // if at the beginning of the alignment, set offset in all lanes to zero.
+        if (current_offset == 0) return 0;
+        // if there is no insertion/deletion, make offset the same as before.
+        if (current_lane == target_lane) return current_offset;
+        // if there are insertion/deletions, increase the offset by k-1+|current_lane - target_lane|.
+        else {
+            // a deletion, at least k-1 number of k-mers will be affected.
+            return current_offset + k - 1 + std::abs(target_lane - current_lane);
         }
          
     }
@@ -256,12 +276,12 @@ private:
         }
         
         // find number of mismatches
-        unsigned int start_point_in_lane = _get_offset(current_lane, best_highway.lane, current_offset);
+        unsigned int start_point_in_lane = _get_starting_point_in_next_lane(current_lane, best_highway.lane, current_offset);
         int mismatches = best_highway.offset - start_point_in_lane;
         if (mismatches > 0) {
             cigar.push_back(mismatches, 'X'_cigar_operation);
         }
-        cigar.push_back(best_highway.offset + best_highway.length - start_point_in_lane, '='_cigar_operation);
+        cigar.push_back(best_highway.offset + best_highway.length - start_point_in_lane + k - 1, '='_cigar_operation);
     }
 
 
@@ -356,6 +376,7 @@ public:
         e = max_errors;
         debug = print_debug_messages;
         lanes = new de_bruijn_lanes<READ_LENGTH>(k, bw);
+        name = "Greedy Aligner";
     }
 
     ~greedy_aligner() {

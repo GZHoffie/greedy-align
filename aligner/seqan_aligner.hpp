@@ -14,7 +14,9 @@ private:
 
 
 public:
-    seqan_aligner() = default;
+    seqan_aligner() {
+        name = "Seqan3 Aligner";
+    }
 
 
     align_result_t align(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) {

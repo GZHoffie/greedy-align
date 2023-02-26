@@ -58,6 +58,7 @@ public:
             }
             C.push_back(C_i);
         }
+        name = "K-Matching Aligner";
     }
 
     align_result_t align(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) {

@@ -34,6 +34,9 @@ private:
     // Random number generator
     std::mt19937* gen;
 
+    // Checking the k-matching between the two strings.
+    unsigned int k;
+
     // Error generating functions
     void _add_substitution(std::vector<seqan3::dna4>& sequence, CIGAR& cigar) {
         unsigned int index = rand() % sequence.size();
@@ -55,12 +58,13 @@ private:
     void _add_deletion(std::vector<seqan3::dna4>& sequence, CIGAR& cigar) {
         unsigned int index = rand() % sequence.size();
         sequence.erase(sequence.begin() + index);
-        cigar.insert(index, 'D'_cigar_operation);
+        cigar.replace(index, 'D'_cigar_operation);
     }
 
 public:
     read_text_pair_simulator(int read_len, float substitution_rate = 0, 
-                             float insertion_rate = 0, float deletion_rate = 0) {
+                             float insertion_rate = 0, float deletion_rate = 0, 
+                             unsigned int seed_length = 3) {
         // set a random seed
         srand(time(NULL));
         
@@ -71,10 +75,32 @@ public:
         substitution_dist = new std::poisson_distribution<int>(substitution_rate * read_length);
         insertion_dist = new std::poisson_distribution<int>(insertion_rate * read_length);
         deletion_dist = new std::poisson_distribution<int>(deletion_rate * read_length);
+
+        // set value of k in k-matching
+        k = seed_length;
     }
+
+    /**
+     * @brief Constructor, but determine the parameters later.
+     * 
+     */
+    read_text_pair_simulator(unsigned int seed_length = 3) : read_text_pair_simulator(0, 0, 0, 0, seed_length) {}
 
     ~read_text_pair_simulator() {
         delete substitution_dist, insertion_dist, deletion_dist;
+    }
+
+    void set(int read_len, float substitution_rate = 0, 
+             float insertion_rate = 0, float deletion_rate = 0) {
+        //delete substitution_dist, insertion_dist, deletion_dist;
+
+        // Set indexing-related numbers
+        read_length = read_len;
+        
+        // Set the error rates
+        substitution_dist = new std::poisson_distribution<int>(substitution_rate * read_length);
+        insertion_dist = new std::poisson_distribution<int>(insertion_rate * read_length);
+        deletion_dist = new std::poisson_distribution<int>(deletion_rate * read_length);
     }
 
     void add_errors(std::vector<seqan3::dna4>& sequence, CIGAR& cigar, 
@@ -148,6 +174,7 @@ public:
         CIGAR cigar(sample_sequence.size(), '='_cigar_operation);
 
         // insert errors
+        simulate_errors(sample_sequence, cigar);
         return std::make_tuple(original_sequence, sample_sequence, cigar);
     }
 
@@ -163,13 +190,9 @@ public:
         if (!std::filesystem::create_directories(output_path)) {
             seqan3::debug_stream << "[WARNING]\t" << "The specified output directory "
                                  << output_path << " is already created." << '\n';
-            for (const auto& entry : std::filesystem::directory_iterator(output_path)) {
-                if (entry.path() == indicator + "_read.fasta" || entry.path() == indicator + "_text.fasta") {
-                    seqan3::debug_stream << "[ERROR]\t\t" << "The fastq file or ground truth file " << entry.path() << " already exists" 
-                                         << " in the specified directory. Terminating generation." << '\n';
-                    return;
-                }
-            }
+            if (!check_filename_in(output_path, indicator + "_read.fasta") || 
+                !check_filename_in(output_path, indicator + "_text.fasta") ||
+                !check_filename_in(output_path, indicator + ".ground_truth")) return;
         }
 
         std::ofstream text_file(output_path / (indicator + "_text.fasta"));
@@ -190,8 +213,8 @@ public:
             text_file << "\n";
             read_file << "\n";
 
-            // record the ground truth.
-            ground_truth_file << cigar.to_string() << "\n";
+            // record the ground truth, including the ground truth cigar string and the k-matching.
+            ground_truth_file << cigar.to_string() << " " << cigar.k_matching(k) << "\n";
         }
 
         seqan3::debug_stream << "[INFO]\t\t" << "The generated fastq file is stored in: " 
