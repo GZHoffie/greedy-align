@@ -30,6 +30,8 @@ private:
     std::vector<seqan3::dna4> neucleotides{ 'A'_dna4, 'C'_dna4, 'G'_dna4, 'T'_dna4 };
     std::poisson_distribution<int>* read_substitution_dist; 
     std::poisson_distribution<int>* read_indel_dist;
+    float SNP_dist;
+    float indel_dist;
 
     // Random number generator
     std::mt19937* gen;
@@ -78,6 +80,9 @@ public:
         // Set the error rates
         read_substitution_dist = new std::poisson_distribution<int>(read_substitution_rate * read_length);
         read_indel_dist = new std::poisson_distribution<int>(read_indel_rate / 2 * read_length);
+
+        SNP_dist = SNP_rate;
+        indel_dist = indel_rate;
 
         // set value of k in k-matching
         k = seed_length;
@@ -139,14 +144,45 @@ public:
         }
     }
 
-    std::tuple<std::vector<seqan3::dna4>, std::vector<seqan3::dna4>, CIGAR> sample() {
+
+    CIGAR sample_reference() {
         /**
-         * @brief Take a sample short read from the reference genome and add errors to it.
-         * @return a tuple storing 3 values: <the generated short read, the original genome,
-         *         the starting point of the short read>.
+         * @brief sample a part of length `reference_length` from the reference genome, and randomly add 
+         *        SNPs and indels and store in `consensus_ground_truth`, from where the reads will be sampled.
+         * @returns a CIGAR string indicating places of indels and SNPs.
          */
         int sequence = rand() % sequences.size();
         std::vector<seqan3::dna4>& current_sequence = sequences[sequence];
+        int size = current_sequence.size();
+        int start = 0;
+        if (current_sequence.size() > reference_length + 1) {
+            start = rand() % (current_sequence.size() - reference_length - 1);
+        }
+        int end = start + reference_length;
+        if (end > current_sequence.size()) {
+            end = current_sequence.size();
+        }
+        std::vector<seqan3::dna4> sample_sequence(current_sequence.begin() + start, current_sequence.begin() + end);
+
+        // copy the original sequence
+        reference_sequence = sample_sequence;
+        consensus_ground_truth = sample_sequence;
+
+        // add some errors to be the consensus
+        int length = reference_sequence.size();
+        CIGAR cigar(length, '='_cigar_operation);
+        add_errors(consensus_ground_truth, cigar, (int)(SNP_dist * length), (int)(indel_dist / 2 * length), (int)(indel_dist / 2 * length));
+
+        return cigar;
+    }
+
+    std::tuple<int, std::vector<seqan3::dna4>, CIGAR> sample() {
+        /**
+         * @brief Take a sample short read from the reference genome and add errors to it.
+         * @return a tuple storing 3 values: <Starting point of the generated read, the original genome,
+         *         the starting point of the short read>.
+         */
+        std::vector<seqan3::dna4>& current_sequence = consensus_ground_truth;
         int size = current_sequence.size();
         int start = 0;
         if (current_sequence.size() > read_length + 1) {
@@ -165,7 +201,7 @@ public:
 
         // insert errors
         simulate_errors(sample_sequence, cigar);
-        return std::make_tuple(original_sequence, sample_sequence, cigar);
+        return std::make_tuple(start, sample_sequence, cigar);
     }
 
     void generate_dataset_file(std::filesystem::path output_path, std::string indicator, unsigned int size) {
@@ -181,38 +217,42 @@ public:
             seqan3::debug_stream << "[WARNING]\t" << "The specified output directory "
                                  << output_path << " is already created." << '\n';
             if (!check_filename_in(output_path, indicator + "_read.fasta") || 
-                !check_filename_in(output_path, indicator + "_text.fasta") ||
+                !check_filename_in(output_path, indicator + "_reference.fasta") ||
                 !check_filename_in(output_path, indicator + ".ground_truth")) return;
         }
 
-        std::ofstream text_file(output_path / (indicator + "_text.fasta"));
+        std::ofstream text_file(output_path / (indicator + "_reference.fasta"));
         std::ofstream read_file(output_path / (indicator + "_read.fasta"));
-        std::ofstream ground_truth_file(output_path / (indicator + ".ground_truth"));
-        for (unsigned int i = 0; i < size; i++) {
-            text_file << ">" << i << "\n";
-            read_file << ">" << i << "\n";
+        std::ofstream read_ground_truth_file(output_path / (indicator + ".read_ground_truth"));
+        std::ofstream mutation_ground_truth_file(output_path / (indicator + ".mutation_ground_truth"));
 
-            // generate sequence
-            auto [text, read, cigar] = sample();
-            for (auto nt : text) {
-                text_file << nt.to_char();
-            }
+        // sample the reference and write the ground truth to the corresponding files.
+        auto cigar = sample_reference();
+        text_file << ">Sampled Reference\n";
+        for (auto nt : reference_sequence) {
+            text_file << nt.to_char;
+        }
+        text_file << "\n";
+        mutation_ground_truth_file << cigar.to_string() << "\n";
+
+
+        for (unsigned int i = 0; i < size; i++) {
+            auto [start, read, cigar] = sample();
+            read_file << ">" << i << " " << start << "\n";
+
+            // write sequence
             for (auto nt : read) {
                 read_file << nt.to_char();
             }
-            text_file << "\n";
+            
             read_file << "\n";
 
             // record the ground truth, including the ground truth cigar string and the k-matching.
-            ground_truth_file << cigar.to_string() << " " << cigar.k_matching(k) << "\n";
+            read_ground_truth_file << cigar.to_string() << "\n";
         }
 
-        seqan3::debug_stream << "[INFO]\t\t" << "The generated fastq file is stored in: " 
-                             << output_path / (indicator + ".fastq") << ".\n";
-        seqan3::debug_stream << "[INFO]\t\t" << "The ground truth for buckets and offsets is stored in: " 
-                             << output_path / (indicator + ".bucket_ground_truth") << ".\n";
-        seqan3::debug_stream << "[INFO]\t\t" << "The ground truth for exact locations is stored in: " 
-                             << output_path / (indicator + ".position_ground_truth") << ".\n";
+        seqan3::debug_stream << "[INFO]\t\t" << "The generated fasta file is stored in: " 
+                             << output_path / (indicator + "_[read/reference].fasta") << ".\n";
     }
 
 };

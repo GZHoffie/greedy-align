@@ -80,6 +80,9 @@ private:
     // k, the length of k-mers used to match the two sequences.
     unsigned int k;
 
+    // number of matches around a SNP so that we ignore it.
+    unsigned int num_match;
+
 
     /**
      * @brief After assigning all the bits in `lanes`, store the ~`lanes`
@@ -89,6 +92,24 @@ private:
         for (int i = 0; i < lanes.size(); i++) {
             lanes_flipped[i] = ~lanes[i];
         }
+    }
+
+    /**
+     * @brief skip short mismatch on lane `shift_amount`, if sufficient number of matches is observed around it.
+     * @param shift_amount The amount of shifting, which should be in [-band_width, band_width].
+     */
+    void _skip_SNP(int shift_amount) {
+        std::bitset<READ_LENGTH> lane_copy;
+        // check positions where all bits in [-num_match, num_match] interval are zeros.
+        for (int j = 1; j <= num_match; j++) {
+            lane_copy |= lanes[shift_amount + bw] << j;
+        }
+        for (int j = 1; j <= num_match; j++) {
+            lane_copy |= lanes[shift_amount + bw] >> j;
+        }
+        seqan3::debug_stream << lane_copy << "\n";
+        // flip those positions to zeros.
+        lanes[shift_amount + bw] &= lane_copy;
     }
 
     /**
@@ -115,8 +136,10 @@ public:
      * 
      * @param band_width Maximum number of indels allowed.
      * @param seed_length length of k-mers used in de Bruijn path.
+     * @param num_match_around_SNP the number of matches around SNP so that we can skip the
+     *                             SNP in highway recognition.
      */
-    de_bruijn_lanes(unsigned int seed_length, int band_width) {
+    de_bruijn_lanes(unsigned int seed_length, int band_width, int num_match_around_SNP = 2) {
         bw = band_width;
         for (int i = -band_width; i <= band_width; i++) {
             std::bitset<READ_LENGTH> lane, lane_rev;
@@ -124,6 +147,7 @@ public:
             lanes_flipped.push_back(lane_rev);
         }
         k = seed_length;
+        num_match = num_match_around_SNP;
     }
 
     /**
@@ -171,9 +195,15 @@ public:
         l1 = s1.size() - k + 1;
         l2 = s2.size() - k + 1;
 
-        // perform shifting and bitwise xor operation, and store in `lanes`.
         for (int l = -bw; l <= bw; l++) {
+            // perform shifting and bitwise xor operation, and store in `lanes`.
             _shifted_xor(v1, v2, l);
+            print();
+
+            // skip short SNPs for faster highway recognition.
+            _skip_SNP(l);
+            print();
+
             auto original_lane = get(l);
             for (int i = 1; i < k; i++) {
                 get(l) |= (original_lane >> i);

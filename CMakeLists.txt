@@ -31,6 +31,10 @@ set(ALIGNER_FILES
     aligner/aligner.hpp
     aligner/greedy_aligner.hpp)
 
+set(VARIANT_CALLER_FILES
+    variant_caller/variant_caller.hpp
+    variant_caller/greedy_variant_caller.hpp)
+
 set(BENCHMARK_FILES
     aligner/seqan_aligner.hpp
     aligner/parasail_aligner.hpp

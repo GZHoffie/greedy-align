@@ -2,7 +2,7 @@
 #include "aligner/parasail_aligner.hpp"
 #include "aligner/seqan_aligner.hpp"
 #include "aligner/k_matching.hpp"
-#include "tools/generate_dataset.hpp"
+#include "tools/msa_dataset.hpp"
 #include "./utils.hpp"
 
 int main() {
