@@ -38,7 +38,8 @@ set(BENCHMARK_FILES
 
 set(UTIL_FILES
     utils.hpp
-    tools/generate_dataset.hpp
+    tools/pairwise_dataset.hpp
+    tools/msa_dataset.hpp
     benchmark/benchmark.hpp)
 
 set(SHARED_FILES
