@@ -7,7 +7,7 @@
 #include "../aligner/k_matching.hpp"
 #include "../aligner/seqan_aligner.hpp"
 
-#include "../tools/generate_dataset.hpp"
+#include "../tools/pairwise_dataset.hpp"
 
 template <unsigned int READ_LENGTH>
 class aligner_benchmark {

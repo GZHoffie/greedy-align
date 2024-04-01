@@ -9,7 +9,7 @@ include(FetchContent)
 # seqan3 for the basic skeleton for the mapper
 FetchContent_Declare(seqan3
     GIT_REPOSITORY https://github.com/seqan/seqan3.git
-    GIT_TAG        master
+    GIT_TAG        main
 )
 FetchContent_MakeAvailable(seqan3)
 
@@ -52,7 +52,7 @@ set(SHARED_FILES
 
 # build dataset generating tools
 add_executable(greedy_aligner main.cpp ${SHARED_FILES})
-target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg)
+target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg parasail)
 
 
 add_executable(greedy_aligner_test test.cpp ${SHARED_FILES})

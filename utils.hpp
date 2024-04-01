@@ -232,6 +232,10 @@ public:
         }
         return res;
     }
+
+    std::vector<seqan3::cigar> get_cigar() {
+        return CIGAR_vector;
+    }
 };
 
 #endif

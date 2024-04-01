@@ -289,10 +289,10 @@ private:
         if (current_offset == 0) return 0;
         // if there is no insertion/deletion, make offset the same as before.
         if (current_lane == target_lane) return current_offset;
-        // if there are insertion/deletions, increase the offset by k-1+|current_lane - target_lane|.
+        // if there are insertion/deletions, increase the offset by |current_lane - target_lane|.
         else {
             // a deletion, at least k-1 number of k-mers will be affected.
-            return current_offset + k - 1 + std::abs(target_lane - current_lane);
+            return current_offset + std::abs(target_lane - current_lane);
         }
          
     }
@@ -307,11 +307,12 @@ private:
         
         // find number of mismatches
         unsigned int start_point_in_lane = _get_starting_point_in_next_lane(current_lane, best_highway.lane, current_offset);
+        seqan3::debug_stream << current_offset << " " << start_point_in_lane << "\n";
         int mismatches = best_highway.offset - start_point_in_lane;
         if (mismatches > 0) {
             cigar.push_back(mismatches, 'X'_cigar_operation);
         }
-        cigar.push_back(best_highway.offset + best_highway.length - start_point_in_lane + k - 1, '='_cigar_operation);
+        cigar.push_back(best_highway.length + k - 1, 'M'_cigar_operation);
     }
 
 
@@ -383,9 +384,9 @@ private:
                 break;
             }                
         }
-        res.CIGAR = cigar.to_string();
+        res.cigar = cigar;
         if (debug) {
-            seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.CIGAR << ".\n";
+            seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.cigar.to_string() << ".\n";
         }
         return res;
 
