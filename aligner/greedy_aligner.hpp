@@ -107,7 +107,6 @@ private:
         for (int j = 1; j <= num_match; j++) {
             lane_copy |= lanes[shift_amount + bw] >> j;
         }
-        seqan3::debug_stream << lane_copy << "\n";
         // flip those positions to zeros.
         lanes[shift_amount + bw] &= lane_copy;
     }
@@ -391,6 +390,13 @@ private:
 
     }
 
+    /**
+     * @brief Find all the highways between s1 and s2.
+     */
+    std::vector<de_bruijn_highway_t> find_consensus(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) {
+        
+    }
+
 
 public:
     /**
@@ -421,6 +427,8 @@ public:
         
         return _find_subpath();
     }
+
+    
 };
 
 #endif
