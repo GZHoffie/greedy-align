@@ -25,6 +25,12 @@ public:
     } align_result_t; 
 
     /**
+     * The parts where the two strings agree.
+     * The consensus is 
+    */
+    typedef std::vector<seqan3::dna4_vector> consensus_t;
+
+    /**
      * @brief Virtual function that aligns two seqan3::dna4 vectors together.
      * @param s1, s2 the DNA strings to be aligned together.
      * @return align_result_t

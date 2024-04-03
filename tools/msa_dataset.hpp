@@ -92,7 +92,7 @@ public:
      * @brief Constructor, but determine the parameters later.
      * 
      */
-    read_text_msa_simulator(unsigned int seed_length = 3) : read_text_pair_simulator(0, 0, 0, 0, seed_length) {}
+    read_text_msa_simulator(unsigned int seed_length = 3) : read_text_msa_simulator(0, 0, 0, 0, seed_length) {}
 
     ~read_text_msa_simulator() {
         delete read_substitution_dist, read_indel_dist;
@@ -200,7 +200,7 @@ public:
         CIGAR cigar(sample_sequence.size(), '='_cigar_operation);
 
         // insert errors
-        simulate_errors(sample_sequence, cigar);
+        //simulate_errors(sample_sequence, cigar);
         return std::make_tuple(start, sample_sequence, cigar);
     }
 
@@ -230,7 +230,7 @@ public:
         auto cigar = sample_reference();
         text_file << ">Sampled Reference\n";
         for (auto nt : reference_sequence) {
-            text_file << nt.to_char;
+            text_file << nt.to_char();
         }
         text_file << "\n";
         mutation_ground_truth_file << cigar.to_string() << "\n";

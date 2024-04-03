@@ -288,10 +288,10 @@ private:
         if (current_offset == 0) return 0;
         // if there is no insertion/deletion, make offset the same as before.
         if (current_lane == target_lane) return current_offset;
-        // if there are insertion/deletions, increase the offset by k-1+|current_lane - target_lane|.
+        // if there are insertion/deletions, increase the offset by |current_lane - target_lane|.
         else {
             // a deletion, at least k-1 number of k-mers will be affected.
-            return current_offset + k - 1 + std::abs(target_lane - current_lane);
+            return current_offset + std::abs(target_lane - current_lane);
         }
          
     }
@@ -306,11 +306,12 @@ private:
         
         // find number of mismatches
         unsigned int start_point_in_lane = _get_starting_point_in_next_lane(current_lane, best_highway.lane, current_offset);
+        seqan3::debug_stream << current_offset << " " << start_point_in_lane << "\n";
         int mismatches = best_highway.offset - start_point_in_lane;
         if (mismatches > 0) {
             cigar.push_back(mismatches, 'X'_cigar_operation);
         }
-        cigar.push_back(best_highway.offset + best_highway.length - start_point_in_lane + k - 1, '='_cigar_operation);
+        cigar.push_back(best_highway.length + k - 1, 'M'_cigar_operation);
     }
 
 
@@ -318,10 +319,9 @@ private:
      * @brief Greedily find the subpath that maximize the k-matching.
      * 
      */
-    align_result_t _find_subpath() {
+    std::vector<de_bruijn_highway_t> _find_subpath() {
         // initialize result
-        align_result_t res;
-        CIGAR cigar;
+        std::vector<de_bruijn_highway_t> res;
 
         // record the current position
         int current_lane = 0, current_offset = 0;
@@ -362,11 +362,8 @@ private:
             
             
             if (best_highway.length > 0) {
-                // record the score
-                res.score += best_highway.length;
-
-                // record the lane switching and matching in the cigar string.
-                _update_cigar(cigar, current_lane, current_offset, best_highway);
+                // record this highway
+                res.push_back(best_highway);
 
                 // move to the end of the best highway.
                 current_lane = best_highway.lane;
@@ -374,7 +371,6 @@ private:
                 if (debug) {
                     seqan3::debug_stream << "[INFO]\t\tCurrent position is (" << current_lane << ", " << current_offset << ").\n";
                 }
-                
             }
             
             // check if we can break out the loop (no more highways or reached the gaol)
@@ -382,9 +378,12 @@ private:
                 break;
             }                
         }
-        res.CIGAR = cigar.to_string();
         if (debug) {
-            seqan3::debug_stream << "[INFO]\t\tFinal k-matching score: " << res.score << ", CIGAR string: " << res.CIGAR << ".\n";
+            // print out the final results
+            seqan3::debug_stream << "[INFO]\t\tFound highways: \n";
+            for (auto & h : res) {
+                seqan3::debug_stream << "[INFO]\t\t|\tLane " << h.lane << ", length " << h.length << ", offset " << h.offset << ".\n";
+            }
         }
         return res;
 
@@ -424,8 +423,11 @@ public:
         if (debug) {
             lanes->print();
         }
-        
-        return _find_subpath();
+        auto highways = _find_subpath();
+
+        // TODO: update the results according to the highways
+        align_result_t res;
+        return res;
     }
 
     
