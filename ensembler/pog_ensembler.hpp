@@ -6,7 +6,66 @@
 #include "../aligner/greedy_aligner.hpp"
 
 #include <seqan3/search/kmer_index/shape.hpp>
+#include <seqan3/search/views/kmer_hash.hpp>
 #include <bitset>
+
+typedef std::pair<std::vector<seqan3::dna4_vector>, std::vector<seqan3::dna4_vector>> consensus_t;
+
+class po_node {
+private:
+    unsigned int offset;
+    unsigned int key;
+    unsigned int index;
+    bool is_start;
+    std::vector<po_node*> next;
+
+public:
+    po_node(unsigned int position, unsigned int kmer_key, unsigned int occurance = 0) {
+        offset = position;
+        key = kmer_key;
+        index = occurance;
+        is_start = false;
+    }
+
+    po_node() : po_node(0, 0, 0) {
+        is_start = true;
+    }
+};
+
+class po_graph {
+private:
+    unsigned int k;
+    po_node start;
+
+    // map that allow quick search of nodes.
+    std::unordered_map<unsigned int, std::vector<po_node*>> nodes;
+
+public:
+    void read_consensus(const consensus_t& consensus) {
+        auto &[c1, c2] = consensus;
+        std::unordered_map<unsigned int, unsigned int> kmer_occurences;
+        po_node* prev = &start; 
+
+        for (auto &c : c1) {
+            auto kmer_keys = c | seqan3::views::kmer_hash(seqan3::ungapped{k});
+            for (auto kmer_key: kmer_keys) {
+                // check how many time this k-mer has occurred.
+                unsigned int occurence = 0;
+                if (kmer_occurences.contains(kmer_key)) {
+                    occurence = kmer_occurences[kmer_key];
+                } 
+                kmer_occurences[kmer_key] = occurence + 1;
+
+                // check if it matches one of the candidates
+
+            }
+
+        }
+    }
+    
+
+
+};
 
 template<unsigned int READ_LENGTH>
 class partial_order_graph_ensembler : public ensembler {
@@ -18,8 +77,7 @@ private:
     // pairwise alignment to find long consecutive matches
     greedy_aligner<READ_LENGTH>* aligner;
 
-    std::pair<std::vector<seqan3::dna4_vector>, std::vector<seqan3::dna4_vector>> 
-    _highway_to_concensus(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2, const std::vector<de_bruijn_highway_t> highways) {
+    consensus_t _highway_to_concensus(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2, const std::vector<de_bruijn_highway_t> highways) {
         // vectors to store the concensus
         std::vector<seqan3::dna4_vector> c1, c2;
         
@@ -61,7 +119,7 @@ public:
         auto highways = aligner->find_long_consecutive_matches(s1, s2);
         auto consensus = _highway_to_concensus(s1, s2, highways);
         seqan3::debug_stream << "OK\n";
-        
+
         seqan3::dna4_vector res;
         return res;
     }
