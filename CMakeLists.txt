@@ -29,7 +29,9 @@ FetchContent_MakeAvailable(parasail)
 # set common header files
 set(ALIGNER_FILES
     aligner/aligner.hpp
-    aligner/greedy_aligner.hpp)
+    aligner/greedy_aligner.hpp
+    ensembler/ensembler.hpp
+    ensembler/pog_ensembler.hpp)
 
 set(VARIANT_CALLER_FILES
     variant_caller/variant_caller.hpp

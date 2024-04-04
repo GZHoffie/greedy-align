@@ -1,6 +1,7 @@
 
 
 #include "aligner/greedy_aligner.hpp"
+#include "ensembler/pog_ensembler.hpp"
 #include "./utils.hpp"
 #include <seqan3/alignment/cigar_conversion/alignment_from_cigar.hpp>
 #include <seqan3/alphabet/cigar/cigar.hpp>
@@ -9,12 +10,21 @@
 using namespace seqan3::literals;
 
 int main() {
-    greedy_aligner<120> ga(4, 7, 3, true);
-    ga.align("ACCATAATGCGTGGGGCCGACTCCGGAATGCGGTCTCCATGCGCGTTTCTCCAACCTAAGGTAGCCTGTAGTTCATTGACCTCTGATGGCGCTTATGAAACCGGGAA"_dna4,
-             "ACCATAATGCGTGGGGCCGACCTCGGAAATGCGGTCTCCATGCGCGTTTCCTCCAACCTAAGGTAGCCTTAGGAAGTTCATTGGACTCTGATGGCGCTTATAGAAACCGGGAA"_dna4);
-    seqan3::dna4_vector test("ACTAAGATCA"_dna4);
-    auto vec = test | seqan3::views::to_char;
-    std::string str(vec.begin(), vec.end());
-    std::cout << str << "\n";
+    seqan3::dna4_vector s1 = "ACCATAATGCGTGGGGCCGACTCCGGAATGCGGTCTCCATGCGCGTTTCTCCAACCTAAGGTAGCCTGTAGTTCATTGACCTCTGATGGCGCTTATGAAACCGGGAA"_dna4;
+    seqan3::dna4_vector s2 = "ACCATAATGCGTGGGGCCGACCTCGGAAATGCGGTCTCCATGCGCGTTTCCTCCAACCTAAGGTAGCCTTAGGAAGTTCATTGGACTCTGATGGCGCTTATAGAAACCGGGAA"_dna4;
+
+    // 0000000000111111111122222222-223333333333444444444-455555555556666666---66677777777778888888888999999-99990000000
+    // 0123456789012345678901234567-890123456789012345678-901234567890123456---78901234567890123456789012345-67890123456
+    // ACCATAATGCGTGGGGCCGACTCCGGAA-TGCGGTCTCCATGCGCGTTTC-TCCAACCTAAGGTAGCCT---GTAGTTCATTGACCTCTGATGGCGCTTAT-GAAACCGGGAA
+    // |||||||||||||||||||||  ||||| ||||||||||||||||||||| ||||||||||||||||||     |||||||||  |||||||||||||||| |||||||||||
+    // ACCATAATGCGTGGGGCCGACCTCGGAAATGCGGTCTCCATGCGCGTTTCCTCCAACCTAAGGTAGCCTTAGGAAGTTCATTGGACTCTGATGGCGCTTATAGAAACCGGGAA
+    // -------- 21 ---------  - 5 - --------- 21 --------
+
+
+    std::vector<seqan3::dna4_vector> data{s1, s2};
+
+    partial_order_graph_ensembler<120> pe(3, 4, 7, 3, false);
+    pe.ensemble(data);
+
     return 0;
 }

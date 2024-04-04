@@ -197,11 +197,11 @@ public:
         for (int l = -bw; l <= bw; l++) {
             // perform shifting and bitwise xor operation, and store in `lanes`.
             _shifted_xor(v1, v2, l);
-            print();
+            //print();
 
             // skip short SNPs for faster highway recognition.
             _skip_SNP(l);
-            print();
+            //print();
 
             auto original_lane = get(l);
             for (int i = 1; i < k; i++) {
@@ -261,6 +261,7 @@ private:
      * @param current_offset the current k-mer we are at.
      */
     unsigned int _get_offset(int current_lane, int target_lane, unsigned int current_offset) {
+        //return current_offset;
         // if at the beginning of the alignment, set offset in all lanes to zero.
         if (current_offset == 0) return 0;
         // if there is no insertion/deletion, make offset the same as before.
@@ -428,6 +429,14 @@ public:
         // TODO: update the results according to the highways
         align_result_t res;
         return res;
+    }
+
+    std::vector<de_bruijn_highway_t> find_long_consecutive_matches(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2) {
+        lanes->read(s1, s2);
+        if (debug) {
+            lanes->print();
+        }
+        return _find_subpath();
     }
 
     
