@@ -18,22 +18,24 @@ public:
     unsigned int key;            // an integer (hash value) representing which k-mer the node is representing, using seqan3::kmer_hash
     unsigned int repetition;     // how many time this k-mer occurs consecutively. For homopolymers
     unsigned int k;              // length of the k-mer
+    unsigned int occurence;      // number of time this k-mer has occurred in the string
     bool is_start;               // whether this node is a start node
     bool visited;                // whether the node is visited
 
     // list of neighbors, with the second element being the edge weight 
     std::unordered_map<std::shared_ptr<po_node>, unsigned int> next;  
 
-    po_node(unsigned int kmer_length, unsigned int position, unsigned int kmer_key, unsigned int consecutive_occurance = 1) {
+    po_node(unsigned int kmer_length, unsigned int position, unsigned int kmer_key, unsigned int consecutive_occurence = 1, unsigned int total_occurence = 0) {
         k = kmer_length;
         offset = position;
         key = kmer_key;
-        repetition = consecutive_occurance;
+        repetition = consecutive_occurence;
+        occurence = total_occurence;
         is_start = false;
         visited = false;
     }
 
-    po_node() : po_node(0, 0, 0, 0) {
+    po_node() : po_node(0, 0, 0, 0, 0) {
         is_start = true;
         visited = false;
     }
@@ -41,7 +43,7 @@ public:
     ~po_node() = default;
 
     void print() {
-        seqan3::debug_stream << "Offset: " << offset << ",\tK-mer: " << hash_to_kmer(key, k) << ",\tNumber of repetitions: " << repetition << ",\t visited:" << visited << ",\tNeighbors: ";
+        seqan3::debug_stream << "Offset: " << offset << ",\tK-mer: " << hash_to_kmer(key, k) << ",\trepetitions: " << repetition << ",\toccurences: " << occurence << ",\t visited:" << visited << ",\tNeighbors: ";
         for (auto& nl : next) {
             seqan3::debug_stream << hash_to_kmer(nl.first->key, k) << " (" << nl.second << "); ";
         }
@@ -68,12 +70,14 @@ private:
      * @param kmer_key the hash value of the kmer the node is representing.
      * @param consecutive_occurence how many times the k-mer repeats (for homopolymers)
      */
-    std::shared_ptr<po_node> _add_new_node(std::shared_ptr<po_node> last_node, unsigned int position, unsigned int kmer_key, unsigned int consecutive_occurence = 1) {
+    std::shared_ptr<po_node> _add_new_node(std::shared_ptr<po_node> last_node, unsigned int position, unsigned int kmer_key, unsigned int consecutive_occurence = 1, unsigned int total_occurence = 0) {
         // STEP 1: check if this node is a neighbor of the last node
         // if yes, return, and no new nodes are created
         if (last_node != nullptr) {
             for (auto & [neighbor, weight] : last_node->next) {
-                if (neighbor->key == kmer_key && neighbor->repetition == consecutive_occurence) {
+                if (neighbor->key == kmer_key && 
+                    neighbor->repetition == consecutive_occurence &&
+                    neighbor->occurence == total_occurence) {
                     last_node->next[neighbor] += 1;
                     return neighbor;
                 }
@@ -85,7 +89,9 @@ private:
             std::shared_ptr<po_node> closest_node = nullptr;
             unsigned int min_distance = error_tolerence;
             for (auto &n : nodes_list[kmer_key]) {
-                if (n->repetition == consecutive_occurence && std::abs((int) n->offset - (int) position) <= min_distance) {
+                if (n->repetition == consecutive_occurence && 
+                    n->occurence == total_occurence &&
+                    std::abs((int) n->offset - (int) position) <= min_distance) {
                     closest_node = n;
                 }
             }
@@ -100,7 +106,7 @@ private:
         }
 
         // STEP 3: we add a new node if the above cases don't happen.
-        auto new_node = std::make_shared<po_node>(k, position, kmer_key, consecutive_occurence);
+        auto new_node = std::make_shared<po_node>(k, position, kmer_key, consecutive_occurence, total_occurence);
         // add this to the list of neighbors of last_node
         if (last_node != nullptr) {
             last_node->next[new_node] = 1;
@@ -117,12 +123,17 @@ private:
 
     void _add_consensus(const std::vector<de_bruijn_highway_t>& highways, const std::vector<seqan3::dna4_vector>& consensus) {
         assert(highways.size() == consensus.size());
+
+        // Map that stores the occurence of k-mers
+        std::unordered_map<unsigned int, unsigned int> occurences;
+
+
         for (unsigned int i = 0; i < highways.size(); i++) {
             // the position of this highway
             unsigned int highway_offset = highways[i].offset;
 
             // get the k-mers in the highway
-            auto kmer_hash = consensus[i] | seqan3::views::kmer_hash(seqan3::ungapped{k});
+            auto kmer_hash = consensus[i] | seqan3::views::kmer_hash(seqan3::ungapped{(uint8_t)k});
             std::vector<unsigned int> kmer_hash_vector(kmer_hash.begin(), kmer_hash.end());
 
             unsigned int j = 0;
@@ -133,6 +144,13 @@ private:
 
                 // key of this k-mer
                 unsigned int kmer_key = kmer_hash_vector[j];
+
+                // number of time this k-mer has occurred
+                unsigned int kmer_occurence = 0;
+                if (occurences.contains(kmer_key)) {
+                    kmer_occurence = occurences[kmer_key] + 1;
+                }
+                occurences[kmer_key] = kmer_occurence;
 
                 // check if this is a homopolymer
                 unsigned int repetition = 1;
@@ -145,7 +163,7 @@ private:
                 if (kmer_offset == 0) {
                     last_node = start;
                 }
-                last_node = _add_new_node(last_node, kmer_offset, kmer_key, repetition);
+                last_node = _add_new_node(last_node, kmer_offset, kmer_key, repetition, kmer_occurence);
                 j++;
             }
         }

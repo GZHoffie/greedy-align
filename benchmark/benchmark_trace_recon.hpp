@@ -38,7 +38,7 @@ private:
 
 public:
     trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file) {
-        pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 3, 7);
+        pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5);//, true);
         clusters_path = clusters_file;
         centers_path = centers_file;
     }
