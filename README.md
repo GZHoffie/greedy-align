@@ -7,8 +7,8 @@ This repository contains experimental code for the greedy alignment algorithm.
 This tool is built with [SeqAn3](https://docs.seqan.de/seqan/3-master-user/index.html). To properly build the package, you need to have GCC >= 11.3, G++ and CMake installed.
 
 ```bash
-git clone https://github.com/GZHoffie/bucket-map.git
-cd bucket-map
+git clone https://github.com/GZHoffie/greedy-align.git
+cd greedy-align
 mkdir build
 cd build
 

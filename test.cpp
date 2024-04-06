@@ -24,7 +24,7 @@ int main() {
 
     std::vector<seqan3::dna4_vector> data{s1, s2, s3};
 
-    partial_order_graph_ensembler<120> pe(3, 4, 7, 3, true);
+    partial_order_graph_ensembler<120> pe(5, 4, 7, 3, true);
     pe.ensemble(data);
 
     return 0;

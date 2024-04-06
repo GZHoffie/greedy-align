@@ -238,4 +238,29 @@ public:
     }
 };
 
+
+seqan3::dna4_vector hash_to_kmer(unsigned int hash, unsigned int k) {
+    using namespace seqan3::literals;
+
+    std::vector<seqan3::dna4> res;
+    for (unsigned int i = 0; i < k; i++) {
+        auto rank = (hash >> ((k - 1 - i) * 2)) & 3;
+        switch (rank){
+            case 0:
+                res.push_back('A'_dna4);
+                break;
+            case 1:
+                res.push_back('C'_dna4);
+                break;
+            case 2:
+                res.push_back('G'_dna4);
+                break;
+            default:
+                res.push_back('T'_dna4);
+                break;
+        }
+    }
+    return res;
+}
+
 #endif
