@@ -37,16 +37,19 @@ set(VARIANT_CALLER_FILES
     variant_caller/variant_caller.hpp
     variant_caller/greedy_variant_caller.hpp)
 
-set(BENCHMARK_FILES
+set(BENCHMARK_ALIGNER_FILES
     aligner/seqan_aligner.hpp
     aligner/parasail_aligner.hpp
-    aligner/k_matching.hpp)
+    aligner/k_matching.hpp
+    benchmark/benchmark_pairwise.hpp)
+
+set(BENCHMARK_TRACE_RECON_FILES
+    benchmark/benchmark_trace_recon.hpp)
 
 set(UTIL_FILES
     utils.hpp
     tools/pairwise_dataset.hpp
-    tools/msa_dataset.hpp
-    benchmark/benchmark.hpp)
+    tools/msa_dataset.hpp)
 
 set(SHARED_FILES
     ${UTIL_FILES}
@@ -56,9 +59,12 @@ set(SHARED_FILES
 add_executable(greedy_aligner main.cpp ${SHARED_FILES})
 target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg parasail)
 
+add_executable(ensembler_benchmark benchmark_trace_recon.cpp ${SHARED_FILES} ${BENCHMARK_TRACE_RECON_FILES})
+target_link_libraries(ensembler_benchmark PUBLIC seqan3::seqan3)
+
 
 add_executable(greedy_aligner_test test.cpp ${SHARED_FILES})
 target_link_libraries(greedy_aligner_test PUBLIC seqan3::seqan3)
 
-add_executable(aligner_benchmark benchmark.cpp ${BENCHMARK_FILES} ${SHARED_FILES})
+add_executable(aligner_benchmark benchmark_pairwise.cpp ${BENCHMARK_FILES} ${SHARED_FILES})
 target_link_libraries(aligner_benchmark PUBLIC seqan3::seqan3 sharg::sharg parasail)

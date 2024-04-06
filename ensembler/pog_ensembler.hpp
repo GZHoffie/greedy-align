@@ -19,6 +19,7 @@ public:
     unsigned int repetition;     // how many time this k-mer occurs consecutively. For homopolymers
     unsigned int k;              // length of the k-mer
     bool is_start;               // whether this node is a start node
+    bool visited;                // whether the node is visited
 
     // list of neighbors, with the second element being the edge weight 
     std::unordered_map<std::shared_ptr<po_node>, unsigned int> next;  
@@ -29,16 +30,18 @@ public:
         key = kmer_key;
         repetition = consecutive_occurance;
         is_start = false;
+        visited = false;
     }
 
     po_node() : po_node(0, 0, 0, 0) {
         is_start = true;
+        visited = false;
     }
 
     ~po_node() = default;
 
     void print() {
-        seqan3::debug_stream << "Offset: " << offset << ",\tK-mer: " << hash_to_kmer(key, k) << ",\tNumber of repetitions: " << repetition << ",\tNeighbors: ";
+        seqan3::debug_stream << "Offset: " << offset << ",\tK-mer: " << hash_to_kmer(key, k) << ",\tNumber of repetitions: " << repetition << ",\t visited:" << visited << ",\tNeighbors: ";
         for (auto& nl : next) {
             seqan3::debug_stream << hash_to_kmer(nl.first->key, k) << " (" << nl.second << "); ";
         }
@@ -158,20 +161,8 @@ private:
         res = hash_to_kmer(kmers[0], k);
         for (unsigned int i = 1; i < kmers.size(); i++) {
             auto rank = kmers[i] & 3;
-                switch (rank){
-                case 0:
-                    res.push_back('A'_dna4);
-                    break;
-                case 1:
-                    res.push_back('C'_dna4);
-                    break;
-                case 2:
-                    res.push_back('G'_dna4);
-                    break;
-                default:
-                    res.push_back('T'_dna4);
-                    break;
-            }
+            auto nt = seqan3::assign_rank_to(rank, seqan3::dna4{});
+            res.push_back(nt);
         }
         return res;
     }
@@ -202,17 +193,29 @@ public:
     /**
      * @brief find the path that has the highest weight.
      */
-    seqan3::dna4_vector consensus_path() {
+    seqan3::dna4_vector consensus_path(unsigned int num_sequences) {
         std::vector<unsigned int> res;
         auto current_node = start;
+
+        // FIXME: find a threshold to recognize a correct path
+        unsigned int min_path_weight = (unsigned int) (num_sequences * (num_sequences - 1) / 40);
+
         while (!current_node->next.empty()) {
-            unsigned int highest_weight = 0;
-            std::shared_ptr<po_node> best_neighbor;
+            current_node->visited = true;
+            //current_node->print();
+
+            unsigned int highest_weight = min_path_weight;
+            std::shared_ptr<po_node> best_neighbor = nullptr;
+            // find the best neighbor that has not yet been visited.
             for (auto neighbor : current_node->next) {
-                if (neighbor.second > highest_weight) {
+                if (!neighbor.first->visited && neighbor.second > highest_weight) {
                     best_neighbor = neighbor.first;
+                    highest_weight = neighbor.second;
                 }
             }
+        
+            if (best_neighbor == nullptr) break;
+
             for (unsigned int i = 0; i < best_neighbor->repetition; i++) {
                 res.push_back(best_neighbor->key);
             }
@@ -221,6 +224,10 @@ public:
         return _path_to_dna4_vector(res);
     }
     
+    void reset() {
+        start = std::make_shared<po_node>();
+        nodes_list.clear();
+    }
 
 
 };
@@ -238,15 +245,17 @@ private:
     // partial order graph to ensemble the consensus
     po_graph* graph;
 
+    bool debug;
+
     consensus_t _highway_to_concensus(const seqan3::dna4_vector& s1, const seqan3::dna4_vector& s2, const std::vector<de_bruijn_highway_t> highways) {
         // vectors to store the concensus
         std::vector<seqan3::dna4_vector> c1, c2;
         
         for (auto & h : highways) {
-            seqan3::dna4_vector h1(&s1[h.offset - h.lane], &s1[h.offset - h.lane + h.length + align_k - 1]);
+            seqan3::dna4_vector h1(&s1[std::max(0, (int)h.offset - (int)h.lane)], &s1[h.offset - h.lane + h.length + align_k - 1]);
             seqan3::dna4_vector h2(&s2[h.offset], &s2[h.offset + h.length + align_k - 1]);
 
-            seqan3::debug_stream << h1 << "\n" << h2 << "\n";
+            //seqan3::debug_stream << h1 << "\n" << h2 << "\n";
             c1.push_back(h1);
             c2.push_back(h2);
         }
@@ -262,6 +271,7 @@ public:
         align_k = align_kmer_length;
         aligner = new greedy_aligner<READ_LENGTH>(align_kmer_length, band_width, max_errors, print_debug_messages);
         graph = new po_graph(pog_kmer_length, band_width);
+        debug = print_debug_messages;
     }
 
     ~partial_order_graph_ensembler() {
@@ -270,24 +280,28 @@ public:
     }
 
     seqan3::dna4_vector ensemble(const std::vector<seqan3::dna4_vector>& sv) {
+        graph->reset();
         // TODO: try sampling pairs of sequences for ensembling.
-        seqan3::debug_stream << sv.size() << "\n";
-        int num_sequences = sv.size();
+        for (unsigned int i = 0; i < sv.size(); i++) {
+            for (unsigned int j = i + 1; j < sv.size(); j++) {
+                //seqan3::debug_stream << i << " " << j << "\n";
+                auto s1 = sv[i];
+                auto s2 = sv[j];
 
-        unsigned i = 0, j = 1;
-        auto s1 = sv[i];
-        auto s2 = sv[j];
-
-        // find consensus between two highways
-        auto highways = aligner->find_long_consecutive_matches(s1, s2);
-        auto consensus = _highway_to_concensus(s1, s2, highways);
-        seqan3::debug_stream << "OK\n";
-
-        graph->read_consensus(highways, consensus);
-        graph->print();
-
-        auto res = graph->consensus_path();
-        seqan3::debug_stream << res << "\n";
+                // find consensus between two highways
+                auto highways = aligner->find_long_consecutive_matches(s1, s2);
+                auto consensus = _highway_to_concensus(s1, s2, highways);
+        
+                graph->read_consensus(highways, consensus);
+            }
+        }
+        //graph->print();
+        auto res = graph->consensus_path(sv.size());
+        //seqan3::debug_stream << res << "\n";
+        if (debug) {
+            graph->print();
+            seqan3::debug_stream << res << "\n";
+        }
 
 
         //seqan3::dna4_vector res;

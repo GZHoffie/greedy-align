@@ -1,7 +1,7 @@
 
 #include "./utils.hpp"
 
-#include "benchmark/benchmark.hpp"
+#include "benchmark/benchmark_pairwise.hpp"
 
 int main() {
     // parameters
