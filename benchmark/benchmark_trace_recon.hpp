@@ -37,8 +37,8 @@ private:
     }
 
 public:
-    trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file) {
-        pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5);//, true);
+    trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file, bool debug = false) {
+        pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5, 110, debug);
         clusters_path = clusters_file;
         centers_path = centers_file;
     }
@@ -64,6 +64,8 @@ public:
         while (centers_stream >> center) {
             //seqan3::debug_stream << center;
             cluster.clear();
+
+            seqan3::debug_stream << total << " " << center << "\n";
             
             // read the cluster of sequences
             std::string temp;
@@ -84,6 +86,7 @@ public:
                 seqan3::debug_stream << pog_result << "\n";
                 seqan3::debug_stream << center << "\n";
             }
+            
             total++;
         }
         seqan3::debug_stream << "Total: " << total << ", correct: " << correct << "\n";
