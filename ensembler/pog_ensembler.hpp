@@ -47,7 +47,7 @@ public:
     void print() {
         seqan3::debug_stream << "Offset: " << offset << ",\tK-mer: " << hash_to_kmer(key, k) << ",\trepetitions: " << repetition << ",\toccurences: " << occurence << ",\t visited:" << visited << ",\tNeighbors: ";
         for (auto& nl : next) {
-            seqan3::debug_stream << hash_to_kmer(nl.first->key, k) << "-" << nl.first->offset << "," << nl.first->occurence << " (" << nl.second << "); ";
+            seqan3::debug_stream << hash_to_kmer(nl.first->key, k) << "-" << nl.first->offset << "," << nl.first->occurence  << "," << nl.first->repetition << " (" << nl.second << "); ";
         }
         seqan3::debug_stream << "\n";
     }
@@ -265,8 +265,10 @@ private:
         for (unsigned int i = 1; i < path.size(); i++) {
             auto rank = path[i]->key & 3;
             auto nt = seqan3::assign_rank_to(rank, seqan3::dna4{});
-            res.push_back(nt);
+            for (unsigned int j = 0; j < path[i]->repetition; j++)
+                res.push_back(nt);
         }
+        //seqan3::debug_stream << res << "\n";
         return res;
     }
 
@@ -324,6 +326,7 @@ public:
         // TODO: find a threshold to recognize a correct path. Here this number is just random:
         // At least 10% of all the pairs (n*(n-1)/2) agree with the path.
         unsigned int min_path_weight = (unsigned int) (num_sequences * (num_sequences - 1) / 20);
+        //this->print();
         _clean_graph(min_path_weight);
 
         //this->print();
