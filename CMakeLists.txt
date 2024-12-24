@@ -9,7 +9,7 @@ include(FetchContent)
 # seqan3 for the basic skeleton for the mapper
 FetchContent_Declare(seqan3
     GIT_REPOSITORY https://github.com/seqan/seqan3.git
-    GIT_TAG        main
+    GIT_TAG        3.3.0
 )
 FetchContent_MakeAvailable(seqan3)
 
@@ -31,7 +31,8 @@ set(ALIGNER_FILES
     aligner/aligner.hpp
     aligner/greedy_aligner.hpp
     ensembler/ensembler.hpp
-    ensembler/pog_ensembler.hpp)
+    ensembler/pog_ensembler.hpp
+    ensembler/greedy_ensembler.hpp)
 
 set(VARIANT_CALLER_FILES
     variant_caller/variant_caller.hpp

@@ -3,12 +3,14 @@
 
 #include "../utils.hpp"
 #include "../ensembler/pog_ensembler.hpp"
+#include "../ensembler/greedy_ensembler.hpp"
 
 template <unsigned int READ_LENGTH>
 class trace_reconstruction_benchmark {
 private:
     // ensemblers
-    partial_order_graph_ensembler<READ_LENGTH>* pog_ensembler;
+    //partial_order_graph_ensembler<READ_LENGTH>* pog_ensembler;
+    greedy_ensembler* g_ensembler;
 
     // dataset directory
     std::filesystem::path clusters_path;
@@ -38,13 +40,15 @@ private:
 
 public:
     trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file, bool debug = false) {
-        pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5, 110, debug);
+        //pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5, 110, debug);
+        g_ensembler = new greedy_ensembler(3, 31, debug);
         clusters_path = clusters_file;
         centers_path = centers_file;
     }
 
     ~trace_reconstruction_benchmark() {
-        delete pog_ensembler;
+        //delete pog_ensembler;
+        delete g_ensembler;
     }
 
     void benchmark() {
@@ -65,7 +69,7 @@ public:
             //seqan3::debug_stream << center;
             cluster.clear();
 
-            //seqan3::debug_stream << total << " " << center << "\n";
+            seqan3::debug_stream << total << " " << center << "\n";
             
             // read the cluster of sequences
             std::string temp;
@@ -79,15 +83,17 @@ public:
             auto dna4_cluster = _string_vector_to_dna4(cluster);
 
             // ensembling
-            auto pog_result = pog_ensembler->ensemble(dna4_cluster);
-            if (_dna4_to_string(pog_result) == center) {
-                correct++;
-            } else {
-                seqan3::debug_stream << pog_result << "\n";
-                seqan3::debug_stream << center << "\n";
+            if (dna4_cluster.size() >= 10) {
+                auto pog_result = g_ensembler->ensemble(dna4_cluster);
+                if (_dna4_to_string(pog_result) == center) {
+                    correct++;
+                } else {
+                    seqan3::debug_stream << pog_result << "\n";
+                    seqan3::debug_stream << center << "\n";
+                }
+                total++;
             }
             
-            total++;
         }
         seqan3::debug_stream << "Total: " << total << ", correct: " << correct << "\n";
     }

@@ -409,7 +409,7 @@ public:
         graph->reset();
         // TODO: try sampling pairs of sequences for ensembling.
         for (unsigned int i = 0; i < sv.size(); i++) {
-            for (unsigned int j = i + 1; j < sv.size(); j++) {
+            for (unsigned int j = i; j < sv.size(); j++) {
                 //seqan3::debug_stream << i << " " << j << "\n";
                 auto s1 = sv[i];
                 auto s2 = sv[j];
