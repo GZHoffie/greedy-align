@@ -15,6 +15,7 @@ private:
     // dataset directory
     std::filesystem::path clusters_path;
     std::filesystem::path centers_path;
+    std::filesystem::path output_path;
 
     std::vector<seqan3::dna4_vector> _string_vector_to_dna4(const std::vector<std::string>& sequences) {
         std::vector<seqan3::dna4_vector> res;
@@ -39,11 +40,12 @@ private:
     }
 
 public:
-    trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file, bool debug = false) {
+    trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file, std::filesystem::path output_file, bool debug = false) {
         //pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5, 110, debug);
-        g_ensembler = new greedy_ensembler(3, 31, debug);
+        g_ensembler = new greedy_ensembler(6, 14, debug);
         clusters_path = clusters_file;
         centers_path = centers_file;
+        output_path = output_file;
     }
 
     ~trace_reconstruction_benchmark() {
@@ -54,6 +56,7 @@ public:
     void benchmark() {
         std::ifstream clusters_stream(clusters_path);
         std::ifstream centers_stream(centers_path);
+        std::ofstream output_stream(output_path);
 
         std::string center;
         
@@ -75,7 +78,7 @@ public:
             std::string temp;
             while (clusters_stream >> temp) {
                 //seqan3::debug_stream << temp << "\n";
-                if (temp[0] == '=') break;
+                if (temp[0] == 'C' && temp[1] == 'L') break;
                 cluster.push_back(temp);
             }
 
@@ -83,8 +86,16 @@ public:
             auto dna4_cluster = _string_vector_to_dna4(cluster);
 
             // ensembling
-            if (dna4_cluster.size() >= 10) {
+            if (dna4_cluster.size() >= 0) {
                 auto pog_result = g_ensembler->ensemble(dna4_cluster);
+                
+                // output the results to the output file
+                for (auto nt : pog_result) {
+                    output_stream << nt.to_char();
+                }
+
+                output_stream << "\n";
+
                 if (_dna4_to_string(pog_result) == center) {
                     correct++;
                 } else {

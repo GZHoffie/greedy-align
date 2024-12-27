@@ -75,7 +75,58 @@ private:
         return max_kmer;
     }
 
-    seqan3::dna4_vector find_consensus(const std::vector<seqan3::dna4_vector>& sv, uint8_t k) {
+    template <typename KEY_TYPE, typename VALUE_TYPE>
+    std::unordered_map<KEY_TYPE, VALUE_TYPE> top_w_count_kmers(const std::unordered_map<KEY_TYPE, VALUE_TYPE>& counts, unsigned int w) {
+        if (w >= counts.size()) {
+            return counts;
+        }
+
+        // find the kmers with the highest values in the `counts`
+        std::vector<std::pair<KEY_TYPE, VALUE_TYPE>> count_vector(counts.begin(), counts.end());
+
+        std::nth_element(count_vector.begin(), count_vector.begin() + w, count_vector.end(), 
+            [](const std::pair<KEY_TYPE, VALUE_TYPE>& a, const std::pair<KEY_TYPE, VALUE_TYPE>& b) {
+                return a.second > b.second;
+            });
+
+        std::unordered_map<KEY_TYPE, VALUE_TYPE> res;
+        for (unsigned int i = 0; i < w; i++) {
+            res[count_vector[i].first] = count_vector[i].second;
+        }
+        return res;   
+    }
+
+    template <typename KEY_TYPE, typename VALUE_TYPE>
+    std::vector<std::pair<KEY_TYPE, VALUE_TYPE>> top_w_count_kmers(const std::vector<std::pair<KEY_TYPE, VALUE_TYPE>>& counts, unsigned int w) {
+        if (w >= counts.size()) {
+            return counts;
+        }
+
+        // find the kmers with the highest values in the `counts`
+        std::vector<std::pair<KEY_TYPE, VALUE_TYPE>> count_vector(counts);
+
+        std::nth_element(count_vector.begin(), count_vector.begin() + w, count_vector.end(), 
+            [](const std::pair<KEY_TYPE, VALUE_TYPE>& a, const std::pair<KEY_TYPE, VALUE_TYPE>& b) {
+                return a.second > b.second;
+            });
+
+        std::vector<std::pair<KEY_TYPE, VALUE_TYPE>> res(count_vector.begin(), count_vector.begin() + w);
+        return res;   
+    }
+
+
+    seqan3::dna4_vector kmer_vector_to_sequence(const std::vector<unsigned int>& kmer_vector, uint8_t k) {
+        seqan3::dna4_vector res;
+        if (kmer_vector.size() > 0) {
+            res = hash_to_kmer(kmer_vector[0], k);
+            for (unsigned int i = 1; i < kmer_vector.size(); i++) {
+                res.push_back(seqan3::assign_rank_to(kmer_vector[i] & 3, seqan3::dna4{}));
+            }
+        }
+        return res;
+    }
+
+    seqan3::dna4_vector find_consensus_greedy(const std::vector<seqan3::dna4_vector>& sv, uint8_t k, unsigned int expected_length) {
         // find the initial k-mer 
         auto [initial_counts, last_counts] = initial_and_last_kmer_counts(sv, k);
         auto all_counts = all_kmer_counts(sv, k);
@@ -87,7 +138,7 @@ private:
 
         auto res = hash_to_kmer(current_kmer, k);
         
-        while (true) {
+        for (unsigned int l = 0; l < expected_length - k; l++) {
             unsigned int max_count = 0;
             unsigned int max_kmer = 0;
 
@@ -115,12 +166,96 @@ private:
                 if (current_kmer == target_kmer) {
                     return res;
                 }
+                if (DEBUG) {
+                    seqan3::debug_stream << res << "\n";
+                }
                 //seqan3::debug_stream << "Current: " << hash_to_kmer(current_kmer, k) << "\n";
             }
         }
 
         return res;
     }
+
+    seqan3::dna4_vector find_consensus_beam(const std::vector<seqan3::dna4_vector>& sv, uint8_t k, unsigned int width, unsigned int expected_length) {
+        // find the initial k-mer 
+        auto [initial_counts, last_counts] = initial_and_last_kmer_counts(sv, k);
+        auto all_counts = all_kmer_counts(sv, k);
+
+
+        // greedily find the next k-mer.
+        auto current_kmer = max_count_kmer(initial_counts);
+        auto target_kmer = max_count_kmer(last_counts);
+
+        auto top_w_init_kmers = top_w_count_kmers<unsigned int, unsigned int>(initial_counts, width);
+
+        // initialize variables that store the path to the k-mer
+        std::vector<std::pair<std::vector<unsigned int>, unsigned int>> current_frontier;
+
+        for (auto const [kmer, weight] : top_w_init_kmers) {
+            current_frontier.push_back(std::make_pair(std::vector<unsigned int>{kmer}, weight));
+        }
+
+
+
+        // Perform greedy beam search
+        for (unsigned int l = 0; l < expected_length - k; l++) {
+            std::vector<std::pair<std::vector<unsigned int>, unsigned int>> new_frontier;
+
+            for (auto [path, weight] : current_frontier) {
+                auto current_kmer = path[path.size() - 1];
+
+                // find the next k-mer with the most votes
+                for (unsigned int i = 0; i < 4; i++) {
+                    unsigned int next_kmer = (current_kmer << 2) & ((1 << (2*k)) - 1) | i;
+                    if (all_counts.contains(next_kmer)) {
+                        // update the path
+                        std::vector<unsigned int> current_path(path);
+                        current_path.push_back(next_kmer);
+                        new_frontier.push_back(std::make_pair(current_path, weight + all_counts[next_kmer]));
+                    }
+                }
+
+            }
+
+            if (new_frontier.empty()) {
+                // no more candidates
+                break;
+            }
+
+            // find the top w candidates
+            current_frontier = top_w_count_kmers<std::vector<unsigned int>, unsigned int>(new_frontier, width);
+
+            if (DEBUG) {
+                seqan3::debug_stream << "Frontier: ";
+                for (auto [path, weight] : current_frontier) {
+                    seqan3::debug_stream << kmer_vector_to_sequence(path, k) << " " << weight << "\n";
+                }
+                seqan3::debug_stream << "\n";
+            }
+        }
+
+        // the best path is simply the longest path with the highest weight
+        unsigned int max_weight = 0;
+        unsigned int max_length = 0;
+        std::vector<unsigned int> max_path;
+        for (auto [path, weight] : current_frontier) {
+            if (path.size() > max_length || (path.size() == max_length && weight > max_weight)) {
+                max_weight = weight;
+                max_length = path.size();
+                max_path = path;
+            }
+        }
+        //seqan3::debug_stream << "Max kmer" << hash_to_kmer(max_kmer, k) << " " << max_weight << "\n";
+
+        // Turn the path into a sequence
+        seqan3::dna4_vector res = kmer_vector_to_sequence(max_path, k);
+        //seqan3::debug_stream << "RES:" << res << "\n";
+
+
+        return res;
+    }
+
+
 
 
 public:
@@ -136,7 +271,8 @@ public:
             seqan3::debug_stream << "Chose k: " << (int)k << "\n";
         }
         //seqan3::debug_stream << "Chose k: " << (int)k << "\n";
-        return find_consensus(sv, k);
+        //return find_consensus_beam(sv, k, 5, 110);
+        return find_consensus_greedy(sv, k, 110);
     }
 };
 
