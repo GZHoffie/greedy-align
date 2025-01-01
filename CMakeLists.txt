@@ -52,6 +52,9 @@ set(UTIL_FILES
     tools/pairwise_dataset.hpp
     tools/msa_dataset.hpp)
 
+set(TYPE_FILES
+    type/k_polymer.hpp)
+
 set(SHARED_FILES
     ${UTIL_FILES}
     ${ALIGNER_FILES})
@@ -69,3 +72,6 @@ target_link_libraries(greedy_aligner_test PUBLIC seqan3::seqan3)
 
 add_executable(aligner_benchmark benchmark_pairwise.cpp ${BENCHMARK_FILES} ${SHARED_FILES})
 target_link_libraries(aligner_benchmark PUBLIC seqan3::seqan3 sharg::sharg parasail)
+
+add_executable(greedy_test_k_polymer test_k_polymer.cpp ${TYPE_FILES})
+target_link_libraries(greedy_test_k_polymer PUBLIC seqan3::seqan3)

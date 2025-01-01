@@ -5,29 +5,33 @@
 #include <unordered_map>
 #include <functional>
 #include <seqan3/alphabet/nucleotide/dna4.hpp>
-#include <seqan3/alphabet/container/dna4_vector.hpp>
+#include <seqan3/alphabet/container/all.hpp>
 
 class KPolymer {
-public:
-    using PolymerElement = std::tuple<int, char>; // (count, nucleotide)
-    using PolymerVector = std::vector<PolymerElement>;
 
-private:
-    PolymerVector polymer;
+
+public:
+    std::vector<unsigned int> counts;
+    std::vector<seqan3::dna4> nucleotides;
     unsigned int K;
 
 public:
-    KPolymer(unsigned int k) : K(k) {}
+    KPolymer(unsigned int k, std::vector<unsigned int> c, std::vector<seqan3::dna4> n) : K(k), counts(c), nucleotides(n) {}
 
+    std::string to_string() const {
+        std::string res;
+        for (size_t i = 0; i < counts.size(); ++i) {
+            res += std::to_string(counts[i]) + nucleotides[i].to_char();
+        }
+        return res;
+    }
 
-    KPolymer(const PolymerVector& elements) : polymer(elements) {}
-
-    const PolymerVector& getPolymer() const {
-        return polymer;
+    unsigned int getK() const {
+        return K;
     }
 
     bool operator==(const KPolymer& other) const {
-        return polymer == other.polymer;
+        return counts == other.counts && nucleotides == other.nucleotides;
     }
 };
 
@@ -37,9 +41,12 @@ namespace std {
     struct hash<KPolymer> {
         size_t operator()(const KPolymer& kPolymer) const {
             size_t hashValue = 0;
-            const auto& elements = kPolymer.getPolymer();
-            for (const auto& [count, nucleotide] : elements) {
-                hashValue ^= std::hash<int>()(count) ^ (std::hash<char>()(nucleotide) << 1);
+            const auto& k = kPolymer.getK();
+            for (size_t i = 0; i < k; ++i) {
+                for (size_t j = 0; j < kPolymer.counts[i]; ++j) {
+                    hashValue |= kPolymer.nucleotides[i].to_rank();
+                    hashValue <<= 2;
+                }
             }
             return hashValue;
         }
@@ -54,42 +61,33 @@ std::vector<KPolymer> to_k_polymers(const seqan3::dna4_vector& sequence, size_t 
         return k_polymers;
     }
 
-    for (size_t i = 0; i + k <= sequence.size(); ++i) {
-        KPolymer::PolymerVector polymer_elements;
-        size_t count = 1;
-        char prev_nucleotide = seqan3::to_char(sequence[i]);
+    // Convert the sequence into a vector of polymers
+    std::vector<unsigned int> counts;
+    std::vector<seqan3::dna4> nucleotides;
 
-        for (size_t j = 1; j < k; ++j) {
-            char current_nucleotide = seqan3::to_char(sequence[i + j]);
-            if (current_nucleotide == prev_nucleotide) {
-                ++count;
-            } else {
-                polymer_elements.emplace_back(count, prev_nucleotide);
-                count = 1;
-                prev_nucleotide = current_nucleotide;
-            }
+    for (size_t i = 0; i < sequence.size(); ++i) {
+        if (i == 0 || sequence[i] != sequence[i - 1]) {
+            counts.push_back(1);
+            nucleotides.push_back(sequence[i]);
+        } else {
+            ++counts.back();
         }
+    }
 
-        polymer_elements.emplace_back(count, prev_nucleotide);
-        k_polymers.emplace_back(polymer_elements);
+    // Create KPolymer objects
+    if (counts.size() < k) {
+        KPolymer k_polymer(counts.size(), counts, nucleotides);
+        k_polymers.push_back(k_polymer);
+        return k_polymers;
+    }
+
+    for (size_t i = 0; i < counts.size() - k + 1; ++i) {
+        std::vector<unsigned int> c(counts.begin() + i, counts.begin() + i + k);
+        std::vector<seqan3::dna4> n(nucleotides.begin() + i, nucleotides.begin() + i + k);
+        KPolymer k_polymer(k, c, n);
+        k_polymers.push_back(k_polymer);
+
     }
 
     return k_polymers;
-}
-
-// Example usage
-int main() {
-    seqan3::dna4_vector sequence = "CCAATTTGGA"_dna4;
-    size_t k = 3;
-
-    auto k_polymers = to_k_polymers(sequence, k);
-
-    for (const auto& k_polymer : k_polymers) {
-        for (const auto& [count, nucleotide] : k_polymer.getPolymer()) {
-            std::cout << count << nucleotide << " ";
-        }
-        std::cout << std::endl;
-    }
-
-    return 0;
 }

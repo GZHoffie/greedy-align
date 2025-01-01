@@ -72,7 +72,7 @@ public:
             //seqan3::debug_stream << center;
             cluster.clear();
 
-            seqan3::debug_stream << total << " " << center << "\n";
+            //seqan3::debug_stream << total << " " << center << "\n";
             
             // read the cluster of sequences
             std::string temp;
