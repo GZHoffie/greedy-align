@@ -63,7 +63,7 @@ set(SHARED_FILES
 add_executable(greedy_aligner main.cpp ${SHARED_FILES})
 target_link_libraries(greedy_aligner PUBLIC seqan3::seqan3 sharg::sharg parasail)
 
-add_executable(ensembler_benchmark benchmark_trace_recon.cpp ${SHARED_FILES} ${BENCHMARK_TRACE_RECON_FILES})
+add_executable(ensembler_benchmark benchmark_trace_recon.cpp ${SHARED_FILES} ${BENCHMARK_TRACE_RECON_FILES} ${TYPE_FILES})
 target_link_libraries(ensembler_benchmark PUBLIC seqan3::seqan3)
 
 

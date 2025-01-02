@@ -1,10 +1,19 @@
 #ifndef GREEDY_ALIGN_GREEDY_ENSEMBLER_HPP
 #define GREEDY_ALIGN_GREEDY_ENSEMBLER_HPP
 
+#include <cmath>
+
 #include "ensembler.hpp"
+#include "../type/k_polymer.hpp"
 
-
+template <typename KMER_TYPE>
 class greedy_ensembler : public ensembler {
+public:
+    using kmer_counter_t = std::unordered_map<KMER_TYPE, unsigned int>;
+    using kmer_set_t = std::unordered_set<KMER_TYPE>;
+    using kmer_vector_t = std::vector<KMER_TYPE>;
+    using neighbor_map_t = std::unordered_map<KMER_TYPE, std::vector<KMER_TYPE>>;
+
 private:
     uint8_t K_LOWER_BOUND, K_UPPER_BOUND;
     bool DEBUG;
@@ -16,8 +25,16 @@ private:
         for (uint8_t res = K_LOWER_BOUND; res <= K_UPPER_BOUND; res++) {
             bool flag = true;
             for (auto s : sv) {
-                auto kmers = s | seqan3::views::kmer_hash(seqan3::ungapped{(uint8_t)res});
-                std::unordered_set<unsigned int> kmer_set(kmers.begin(), kmers.end());
+                kmer_vector_t kmers;
+                if (std::is_same<KMER_TYPE, KPolymer>::value) {
+                    auto kmer_range = to_k_polymers(s, res);
+                    //kmers = kmer_vector_t(kmer_range.begin(), kmer_range.end());
+                } else {
+                    auto kmer_range = s | seqan3::views::kmer_hash(seqan3::ungapped{(uint8_t)res});
+                    kmers = kmer_vector_t(kmer_range.begin(), kmer_range.end());
+                }
+                //auto kmers = s | seqan3::views::kmer_hash(seqan3::ungapped{(uint8_t)res});
+                kmer_set_t kmer_set(kmers.begin(), kmers.end());
                 if (kmer_set.size() != kmers.size()) {
                     flag = false;
                     break;
@@ -29,12 +46,12 @@ private:
         return K_UPPER_BOUND;
     }
 
-    std::unordered_map<unsigned int, unsigned int> all_kmer_counts(const std::vector<seqan3::dna4_vector>& sv, uint8_t k) {
-        std::unordered_map<unsigned int, unsigned int> res;
+    kmer_counter_t all_kmer_counts(const std::vector<seqan3::dna4_vector>& sv, uint8_t k) {
+        kmer_counter_t res;
         for (auto s : sv) {
-            auto kmers = s | seqan3::views::kmer_hash(seqan3::ungapped{k});
-            std::unordered_set<unsigned int> kmer_set(kmers.begin(), kmers.end());
-            for (auto kmer : kmer_set) {
+            auto kmer_range = s | seqan3::views::kmer_hash(seqan3::ungapped{k});
+            auto kmers = kmer_set_t(kmer_range.begin(), kmer_range.end());
+            for (auto kmer : kmers) {
                 if (res.contains(kmer)) {
                     res[kmer]++;
                 } else {
@@ -45,16 +62,38 @@ private:
         return res;
     }
 
-    std::pair<std::unordered_map<unsigned int, unsigned int>,
-              std::unordered_map<unsigned int, unsigned int>> 
+    neighbor_map_t all_neighbors(const kmer_counter_t& counts) {
+        neighbor_map_t res;
+        for (auto& [kmer, count] : counts) {
+            seqan3::dna4_vector k_1_mer_nucleotides(kmer.nucleotides.begin() + 1, kmer.nucleotides.end());
+            std::vector<unsigned int> k_1_mer_counts(kmer.counts.begin() + 1, kmer.counts.end());
+            KMER_TYPE previous_k_1_mer(kmer.getK() - 1, k_1_mer_counts, k_1_mer_nucleotides);
+            if (res.contains(previous_k_1_mer)) {
+                res[previous_k_1_mer].push_back(kmer);
+            } else {
+                res[previous_k_1_mer] = std::vector<KMER_TYPE>{kmer};
+            }
+        }
+        return res;
+    }
+
+    std::pair<kmer_counter_t, kmer_counter_t> 
     initial_and_last_kmer_counts(const std::vector<seqan3::dna4_vector>& sv, uint8_t k) {
-        std::unordered_map<unsigned int, unsigned int> initial_kmer_count;
-        std::unordered_map<unsigned int, unsigned int> last_kmer_count;
+        kmer_counter_t initial_kmer_count;
+        kmer_counter_t last_kmer_count;
 
         // only count the first and the last k-mer in each sequence
         for (auto s : sv) {
-            auto kmer = s | seqan3::views::kmer_hash(seqan3::ungapped{k});
-            std::vector<unsigned int> kmer_vector(kmer.begin(), kmer.end());
+            //auto kmer = s | seqan3::views::kmer_hash(seqan3::ungapped{k});
+            kmer_vector_t kmers;
+            if (std::is_same<KMER_TYPE, KPolymer>::value) {
+                auto kmer_range = to_k_polymers(s, k);
+                //kmers = kmer_vector_t(kmer_range.begin(), kmer_range.end());
+            } else {
+                auto kmer_range = s | seqan3::views::kmer_hash(seqan3::ungapped{k});
+                kmers = kmer_vector_t(kmer_range.begin(), kmer_range.end());
+            }
+            std::vector<KMER_TYPE> kmer_vector(kmers.begin(), kmers.end());
             if (kmer_vector.size() > 0) {
                 initial_kmer_count[kmer_vector[0]]++;
                 last_kmer_count[kmer_vector[kmer_vector.size()-1]]++;
@@ -63,9 +102,9 @@ private:
         return std::make_pair(initial_kmer_count, last_kmer_count);
     }
 
-    unsigned int max_count_kmer(const std::unordered_map<unsigned int, unsigned int>& counts) {
+    KMER_TYPE max_count_kmer(const kmer_counter_t& counts) {
         unsigned int max_count = 0;
-        unsigned int max_kmer = 0;
+        KMER_TYPE max_kmer;
         for (auto& [kmer, count] : counts) {
             if (count > max_count) {
                 max_count = count;
@@ -122,7 +161,7 @@ private:
     }
 
 
-    seqan3::dna4_vector kmer_vector_to_sequence(const std::vector<unsigned int>& kmer_vector, uint8_t k) {
+    seqan3::dna4_vector kmer_vector_to_sequence(const std::vector<KMER_TYPE>& kmer_vector, uint8_t k) {
         seqan3::dna4_vector res;
         if (kmer_vector.size() > 0) {
             res = hash_to_kmer(kmer_vector[0], k);
@@ -147,12 +186,12 @@ private:
         
         for (unsigned int l = 0; l < expected_length - k; l++) {
             unsigned int max_count = 0;
-            unsigned int max_kmer = 0;
+            KMER_TYPE max_kmer = 0;
 
             // find the next k-mer with the most votes
             for (unsigned int i = 0; i < 4; i++) {
                 //seqan3::debug_stream << "Current: " << current_kmer << " " << hash_to_kmer(current_kmer, k) << "\n";
-                unsigned int next_kmer = (current_kmer << 2) & ((1 << (2*k)) - 1) | i;
+                KMER_TYPE next_kmer = (current_kmer << 2) & ((1 << (2*k)) - 1) | i;
                 //seqan3::debug_stream << hash_to_kmer(next_kmer, k) << " " << all_counts[next_kmer] << "\n";
                 if (all_counts.contains(next_kmer) && all_counts[next_kmer] > max_count) {
                     if (DEBUG) {
@@ -197,17 +236,19 @@ private:
         auto top_w_init_kmers = top_w_count_kmers<unsigned int, unsigned int>(initial_counts, width);
 
         // initialize variables that store the path to the k-mer
-        std::vector<std::pair<std::vector<unsigned int>, unsigned int>> current_frontier;
+        std::vector<std::pair<std::vector<unsigned int>, float>> current_frontier;
 
-        for (auto const [kmer, weight] : top_w_init_kmers) {
-            current_frontier.push_back(std::make_pair(std::vector<unsigned int>{kmer}, weight));
-        }
+        //for (auto const [kmer, weight] : top_w_init_kmers) {
+        //    current_frontier.push_back(std::make_pair(std::vector<unsigned int>{kmer}, std::log2((float)weight)));
+        //}
+
+        current_frontier.push_back(std::make_pair(std::vector<unsigned int>{current_kmer}, std::log2((float)initial_counts[current_kmer])));
 
 
 
         // Perform greedy beam search
         for (unsigned int l = 0; l < expected_length - k; l++) {
-            std::vector<std::pair<std::vector<unsigned int>, unsigned int>> new_frontier;
+            std::vector<std::pair<std::vector<unsigned int>, float>> new_frontier;
 
             for (auto [path, weight] : current_frontier) {
                 auto current_kmer = path[path.size() - 1];
@@ -219,7 +260,7 @@ private:
                         // update the path
                         std::vector<unsigned int> current_path(path);
                         current_path.push_back(next_kmer);
-                        new_frontier.push_back(std::make_pair(current_path, weight + all_counts[next_kmer]));
+                        new_frontier.push_back(std::make_pair(current_path, weight + std::log2((float)all_counts[next_kmer])));
                     }
                 }
 
@@ -231,7 +272,7 @@ private:
             }
 
             // find the top w candidates
-            current_frontier = top_w_count_kmers<std::vector<unsigned int>, unsigned int>(new_frontier, width);
+            current_frontier = top_w_count_kmers<std::vector<unsigned int>, float>(new_frontier, width);
 
             if (DEBUG) {
                 seqan3::debug_stream << "Frontier: ";
@@ -243,16 +284,21 @@ private:
         }
 
         // the best path is simply the longest path with the highest weight
-        unsigned int max_weight = 0;
+        float max_weight = 0;
         unsigned int max_length = 0;
+        bool found_target = false;
         std::vector<unsigned int> max_path;
         for (auto [path, weight] : current_frontier) {
             //seqan3::debug_stream << "Path: " << kmer_vector_to_sequence(path, k) << " " << weight << "\n";
             //seqan3::debug_stream << kmer_vector_to_sequence(max_path, k) << ", " <<  max_weight << "\n";
-            if (path.size() > max_length || (path.size() == max_length && weight > max_weight)) {
+            bool match_target = (path[path.size() - 1] == target_kmer);
+            if ((!found_target && match_target) || (((found_target && match_target) || (!found_target && !match_target)) && weight > max_weight)) {
                 max_weight = weight;
                 max_length = path.size();
                 max_path = path;
+                if (match_target) {
+                    found_target = true;
+                }
             }
         }
         //seqan3::debug_stream << "Max kmer" << hash_to_kmer(max_kmer, k) << " " << max_weight << "\n";
@@ -341,7 +387,7 @@ public:
             seqan3::debug_stream << "Chose k: " << (int)k << "\n";
         }
         //seqan3::debug_stream << "Chose k: " << (int)k << "\n";
-        return find_consensus_beam(sv, k, 10, 110);
+        return find_consensus_beam(sv, k, 50, 110);
         //return find_consensus_bfs(sv, k, 110);
         //return find_consensus_greedy(sv, k, 150);
     }

@@ -10,7 +10,7 @@ class trace_reconstruction_benchmark {
 private:
     // ensemblers
     //partial_order_graph_ensembler<READ_LENGTH>* pog_ensembler;
-    greedy_ensembler* g_ensembler;
+    greedy_ensembler<unsigned int>* g_ensembler;
 
     // dataset directory
     std::filesystem::path clusters_path;
@@ -42,7 +42,7 @@ private:
 public:
     trace_reconstruction_benchmark(std::filesystem::path clusters_file, std::filesystem::path centers_file, std::filesystem::path output_file, bool debug = false) {
         //pog_ensembler = new partial_order_graph_ensembler<READ_LENGTH>(6, 4, 7, 5, 110, debug);
-        g_ensembler = new greedy_ensembler(6, 14, debug);
+        g_ensembler = new greedy_ensembler<unsigned int>(6, 14, debug);
         clusters_path = clusters_file;
         centers_path = centers_file;
         output_path = output_file;
@@ -72,7 +72,7 @@ public:
             //seqan3::debug_stream << center;
             cluster.clear();
 
-            //seqan3::debug_stream << total << " " << center << "\n";
+            seqan3::debug_stream << total << " " << center << "\n";
             
             // read the cluster of sequences
             std::string temp;

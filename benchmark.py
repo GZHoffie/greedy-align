@@ -1,6 +1,6 @@
 import Levenshtein
 
-with open("/mnt/c/Users/zhenh/trace_recon/Output_greedy.txt") as f:
+with open("/mnt/c/Users/zhenh/trace_recon/Output_nanopore.txt") as f:
     reconstructed_strands = f.readlines()
 
 reconstructed_strands = list(map(lambda x:x.strip(), reconstructed_strands))
@@ -54,9 +54,9 @@ for i in range(len(reconstructed_strands)):
     if answer[i] == reconstructed_strands[i]:
         correct+= 1
     #else:
-    #    print(i)
-    #    print('Actual:\t',answer[i])
-    #    print('Recon: \t', reconstructed_strands[i])
+        #print(i)
+        #print('Actual:\t',answer[i])
+        #print('Recon: \t', reconstructed_strands[i])
         
 print("number exact match:", str(correct)+'/'+str(len(answer)))
 
@@ -66,9 +66,9 @@ for i in range(len(reconstructed_strands)):
         if j >= len(reconstructed_strands[i]):
             index_wrong_counts[j] += 1
             continue
-        # print(i,j)
-        # print(len(reconstructed_strands[i]),len(answer[i]))
-        # print(answer[i])
+        #print(i,j)
+        #print(len(reconstructed_strands[i]),len(answer[i]))
+        #print(answer[i])
         if reconstructed_strands[i][j] != answer[i][j]:
             index_wrong_counts[j] += 1
 
