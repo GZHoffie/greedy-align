@@ -222,6 +222,43 @@ private:
         return res;
     }
 
+    std::vector<std::pair<std::vector<unsigned int>, float>> 
+    beam_search_step(const std::vector<std::pair<std::vector<unsigned int>, float>>& current_frontier, const std::unordered_map<unsigned int, unsigned int>& all_counts, unsigned int width, bool forward, uint8_t k) {
+        std::vector<std::pair<std::vector<unsigned int>, float>> new_frontier;
+
+        for (auto [path, weight] : current_frontier) {
+            auto current_kmer = path[path.size() - 1];
+
+            // find the next k-mer with the most votes
+            for (unsigned int i = 0; i < 4; i++) {
+                unsigned int next_kmer;
+                if (forward) {
+                    next_kmer = (current_kmer << 2) & ((1 << (2*k)) - 1) | i;
+                } else {
+                    next_kmer = (current_kmer >> 2) | (i << (2*k - 2));
+                }
+                if (all_counts.contains(next_kmer)) {
+                    // update the path
+                    std::vector<unsigned int> current_path(path);
+                    current_path.push_back(next_kmer);
+                    new_frontier.push_back(std::make_pair(current_path, weight + std::log2((float)all_counts.at(next_kmer))));
+                }
+            }
+        }
+
+        if (new_frontier.empty()) {
+            // no more candidates
+            return new_frontier;
+        }
+
+        // find the top w candidates
+        return top_w_count_kmers<std::vector<unsigned int>, float>(new_frontier, width);
+    }
+
+
+
+
+
     seqan3::dna4_vector find_consensus_beam(const std::vector<seqan3::dna4_vector>& sv, uint8_t k, unsigned int width, unsigned int expected_length) {
         // find the initial k-mer 
         auto [initial_counts, last_counts] = initial_and_last_kmer_counts(sv, k);
@@ -248,23 +285,7 @@ private:
 
         // Perform greedy beam search
         for (unsigned int l = 0; l < expected_length - k; l++) {
-            std::vector<std::pair<std::vector<unsigned int>, float>> new_frontier;
-
-            for (auto [path, weight] : current_frontier) {
-                auto current_kmer = path[path.size() - 1];
-
-                // find the next k-mer with the most votes
-                for (unsigned int i = 0; i < 4; i++) {
-                    unsigned int next_kmer = (current_kmer << 2) & ((1 << (2*k)) - 1) | i;
-                    if (all_counts.contains(next_kmer)) {
-                        // update the path
-                        std::vector<unsigned int> current_path(path);
-                        current_path.push_back(next_kmer);
-                        new_frontier.push_back(std::make_pair(current_path, weight + std::log2((float)all_counts[next_kmer])));
-                    }
-                }
-
-            }
+            auto new_frontier = beam_search_step(current_frontier, all_counts, width, true, k);
 
             if (new_frontier.empty()) {
                 // no more candidates
@@ -301,6 +322,135 @@ private:
                 }
             }
         }
+        //seqan3::debug_stream << "Max kmer" << hash_to_kmer(max_kmer, k) << " " << max_weight << "\n";
+
+        // Turn the path into a sequence
+        seqan3::dna4_vector res = kmer_vector_to_sequence(max_path, k);
+        //seqan3::debug_stream << "RES:" << res << "\n";
+
+
+        return res;
+    }
+
+
+
+    seqan3::dna4_vector find_consensus_beam_bidirectional(const std::vector<seqan3::dna4_vector>& sv, uint8_t k, unsigned int width, unsigned int expected_length) {
+        // find the initial k-mer 
+        auto [initial_counts, last_counts] = initial_and_last_kmer_counts(sv, k);
+        auto all_counts = all_kmer_counts(sv, k);
+
+        auto number_of_sequences = sv.size();
+
+        // greedily find the next k-mer.
+        auto initial_kmer = max_count_kmer(initial_counts);
+        auto target_kmer = max_count_kmer(last_counts);
+
+        auto top_w_init_kmers = top_w_count_kmers<unsigned int, unsigned int>(initial_counts, width);
+
+        // initialize variables that store the path to the k-mer
+        std::vector<std::pair<std::vector<unsigned int>, float>> forward_frontier;
+
+        for (auto const [kmer, weight] : top_w_init_kmers) {
+            forward_frontier.push_back(std::make_pair(std::vector<unsigned int>{kmer}, std::log2((float)weight)));
+        }
+
+        //forward_frontier.push_back(std::make_pair(std::vector<unsigned int>{initial_kmer}, std::log2((float)initial_counts[initial_kmer])));
+
+        // forward beam search
+        unsigned int forward_length = (expected_length - k + 1) / 2;
+        unsigned int backward_length = expected_length - k + 1 - forward_length;
+        //seqan3::debug_stream << "Forward length: " << forward_length << "\n";
+        //seqan3::debug_stream << "Backward length: " << backward_length << "\n";
+
+
+
+        // Perform greedy beam search
+        for (unsigned int l = 0; l < forward_length; l++) {
+            auto new_frontier = beam_search_step(forward_frontier, all_counts, width, true, k);
+
+            if (new_frontier.empty()) {
+                // no more candidates
+                break;
+            }
+            forward_frontier = new_frontier;
+        }
+
+
+        // backward beam search
+        std::vector<std::pair<std::vector<unsigned int>, float>> backward_frontier;
+
+        auto top_w_target_kmers = top_w_count_kmers<unsigned int, unsigned int>(last_counts, width);
+
+
+        for (auto const [kmer, weight] : top_w_target_kmers) {
+            backward_frontier.push_back(std::make_pair(std::vector<unsigned int>{kmer}, std::log2((float)weight)));
+        }
+
+        //backward_frontier.push_back(std::make_pair(std::vector<unsigned int>{target_kmer}, std::log2((float)last_counts[target_kmer])));
+
+        for (unsigned int l = 0; l < backward_length - 1; l++) {
+            auto new_frontier = beam_search_step(backward_frontier, all_counts, width, false, k);
+
+            if (new_frontier.empty()) {
+                // no more candidates
+                break;
+            }
+            backward_frontier = new_frontier;
+        }
+
+        // merge the two frontiers
+        // create a map that contains the common k-mers between the two frontiers
+        std::unordered_map<unsigned int, float> forward_frontier_kmer_to_weight;
+        std::unordered_map<unsigned int, std::vector<unsigned int>> forward_frontier_kmer_to_path;
+
+        for (auto [path, weight] : forward_frontier) {
+            auto kmer = path[path.size() - 1];
+            if (forward_frontier_kmer_to_weight.contains(kmer)) {
+                if (weight > forward_frontier_kmer_to_weight[kmer]) {
+                    forward_frontier_kmer_to_weight[kmer] = weight;
+                    forward_frontier_kmer_to_path[kmer] = path;
+                }
+            } else {
+                forward_frontier_kmer_to_weight[kmer] = weight;
+                forward_frontier_kmer_to_path[kmer] = path;
+            }
+        }
+
+        // check the backward frontier
+        std::unordered_map<unsigned int, float> backward_frontier_kmer_to_weight;
+        std::unordered_map<unsigned int, std::vector<unsigned int>> backward_frontier_kmer_to_path;
+
+        for (auto [path, weight] : backward_frontier) {
+            auto kmer = path[path.size() - 1];
+            if (backward_frontier_kmer_to_weight.contains(kmer)) {
+                if (weight > backward_frontier_kmer_to_weight[kmer]) {
+                    backward_frontier_kmer_to_weight[kmer] = weight;
+                    backward_frontier_kmer_to_path[kmer] = path;
+                }
+            } else {
+                backward_frontier_kmer_to_weight[kmer] = weight;
+                backward_frontier_kmer_to_path[kmer] = path;
+            }
+        }
+
+        // merge the two frontiers
+        // pick the k-mer with the highest weight
+        float max_weight = 0;
+        unsigned int max_length = 0;
+        bool found_target = false;
+        std::vector<unsigned int> max_path;
+        for (auto [kmer, weight] : forward_frontier_kmer_to_weight) {
+            if (backward_frontier_kmer_to_weight.contains(kmer)) {
+                float total_weight = weight + backward_frontier_kmer_to_weight[kmer];
+                if (total_weight > max_weight) {
+                    max_weight = total_weight;
+                    max_path = forward_frontier_kmer_to_path[kmer];
+                    auto& backward_path = backward_frontier_kmer_to_path[kmer];
+                    max_path.insert(max_path.end(), backward_path.rbegin() + 1, backward_path.rend());
+                }
+            }
+        }
+
         //seqan3::debug_stream << "Max kmer" << hash_to_kmer(max_kmer, k) << " " << max_weight << "\n";
 
         // Turn the path into a sequence
@@ -387,7 +537,8 @@ public:
             seqan3::debug_stream << "Chose k: " << (int)k << "\n";
         }
         //seqan3::debug_stream << "Chose k: " << (int)k << "\n";
-        return find_consensus_beam(sv, k, 50, 110);
+        //return find_consensus_beam(sv, k, 50, 108);
+        return find_consensus_beam_bidirectional(sv, k, 50, 108);
         //return find_consensus_bfs(sv, k, 110);
         //return find_consensus_greedy(sv, k, 150);
     }

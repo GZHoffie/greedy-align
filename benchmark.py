@@ -1,13 +1,13 @@
 import Levenshtein
 
-with open("/mnt/c/Users/zhenh/trace_recon/Output_nanopore.txt") as f:
+with open("/mnt/c/Users/zhenh/trace_recon/Output_oligo0.txt") as f:
     reconstructed_strands = f.readlines()
 
 reconstructed_strands = list(map(lambda x:x.strip(), reconstructed_strands))
 
 
 #reconstructed_strands = # your reconstructed strands go here
-answer_file = open("/mnt/c/Users/zhenh/trace_recon/our_nanopore_refs.txt","r")
+answer_file = open("/mnt/c/Users/zhenh/trace_recon/oligo0refs.txt","r")
 
 
 answer = answer_file.readlines()
